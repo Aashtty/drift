@@ -4,7 +4,7 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useGlobalShortcut } from '@/hooks/useGlobalShortcut'
-//import { fadeUp } from '@/lib/utils/motionVariants'
+import { fadeUp } from '@/lib/utils/motionVariants'
 
 interface BrainDumpProps {
   onSubmit: (rawText: string) => void
@@ -55,7 +55,7 @@ export function BrainDump({ onSubmit }: BrainDumpProps) {
         >
           <motion.div
             className="glass-chromatic"
-            //variants={fadeUp}
+            variants={fadeUp}
             initial="hidden"
             animate="visible"
             exit="hidden"
