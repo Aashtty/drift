@@ -1,0 +1,12 @@
+
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "default",
+  "description": "Default capability for DRIFT's main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "global-shortcut:default",
+    "notification:default"
+  ]
+}

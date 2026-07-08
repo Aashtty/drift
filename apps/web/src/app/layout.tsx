@@ -4,6 +4,7 @@ import '@/styles/globals.css'
 import { ParticleCanvas } from '@/components/core/ParticleCanvas'
 import { EdgeArc } from '@/components/core/EdgeArc'
 import { StateTransition } from '@/components/core/StateTransition'
+import { AppShell } from '@/components/core/AppShell'
 
 export const metadata: Metadata = {
   title: 'DRIFT — Catch your flow. Ride it.',
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <StateTransition />
         <ParticleCanvas />
         <EdgeArc />
-        <div style={{ position: 'relative', zIndex: 1 }}>{children}</div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   )
