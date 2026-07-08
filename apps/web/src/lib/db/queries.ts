@@ -69,7 +69,39 @@ export async function insertSessionRemote(args: InsertSessionArgs): Promise<Focu
     })
     .select()
     .single()
-
   if (error) throw error
   return data as FocusSession
+}
+
+export async function fetchSessionsRemote(userId: string, sinceDaysAgo: number): Promise<FocusSession[]> {
+  const since = new Date()
+  since.setDate(since.getDate() - sinceDaysAgo)
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('started_at', since.toISOString())
+    .order('started_at', { ascending: true })
+  if (error) throw error
+  return data as FocusSession[]
+}
+
+interface InsertShutdownArgs {
+  userId: string
+  completedTaskIds: string[]
+  carriedTaskIds: string[]
+  anchorTaskId: string | null
+  notes: string | null
+}
+
+export async function insertShutdownRemote(args: InsertShutdownArgs): Promise<void> {
+  const { error } = await supabase.from('shutdowns').insert({
+    user_id: args.userId,
+    completed_at: new Date().toISOString(),
+    completed_task_ids: args.completedTaskIds,
+    carried_task_ids: args.carriedTaskIds,
+    anchor_task_id: args.anchorTaskId,
+    notes: args.notes,
+  })
+  if (error) throw error
 }
