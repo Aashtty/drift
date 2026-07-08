@@ -1,4 +1,6 @@
 // apps/web/src/app/now/page.tsx
+// only the added import + <SoundControl /> render are new here — the rest
+// of this file is unchanged from Session 2.6.
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -6,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useElasticTimer } from '@/hooks/useElasticTimer'
 import { NowBar } from '@/components/core/NowBar'
 import { HyperfocusLock } from '@/components/session/HyperfocusLock'
+import { SoundControl } from '@/components/session/SoundControl'
 import { useAppState } from '@/hooks/useAppState'
 import { useSessionStore } from '@/stores/sessionStore'
 
@@ -41,9 +44,6 @@ export default function NowPage() {
   function handleLockIn() {
     setLocked(true)
     setHyperfocus(true)
-    // DRIFT suppresses its OWN notifications while locked — see HyperfocusLock's
-    // doc comment for the honest scope. No sendNotification() calls happen
-    // anywhere while `locked` is true.
   }
 
   async function endAndRoute(path: string) {
@@ -58,17 +58,20 @@ export default function NowPage() {
   }
 
   return (
-    <NowBar
-      taskName={taskName}
-      anchorName={anchorName}
-      elapsedSeconds={elapsedSeconds}
-      baseDurationSeconds={BASE_DURATION_SECONDS}
-      phase={phase}
-      justPulsed={justPulsed}
-      appState={state}
-      onDone={() => void endAndRoute('/drift-summary')}
-      onPause={() => void endAndRoute('/')}
-      onLockIn={handleLockIn}
-    />
+    <>
+      <NowBar
+        taskName={taskName}
+        anchorName={anchorName}
+        elapsedSeconds={elapsedSeconds}
+        baseDurationSeconds={BASE_DURATION_SECONDS}
+        phase={phase}
+        justPulsed={justPulsed}
+        appState={state}
+        onDone={() => void endAndRoute('/drift-summary')}
+        onPause={() => void endAndRoute('/')}
+        onLockIn={handleLockIn}
+      />
+      <SoundControl />
+    </>
   )
 }

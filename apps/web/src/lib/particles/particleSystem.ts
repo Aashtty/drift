@@ -8,7 +8,6 @@ export interface Particle {
   vy: number
   size: number
   opacity: number
-  color: string
 }
 
 interface ParticleConfig {
@@ -30,12 +29,7 @@ function rand(min: number, max: number): number {
   return Math.random() * (max - min) + min
 }
 
-export function createParticle(
-  width: number,
-  height: number,
-  config: ParticleConfig,
-  color: string
-): Particle {
+export function createParticle(width: number, height: number, config: ParticleConfig): Particle {
   return {
     x: rand(0, width),
     y: rand(0, height),
@@ -43,24 +37,38 @@ export function createParticle(
     vy: rand(-config.speedMax, config.speedMax),
     size: rand(1.5, config.sizeMax),
     opacity: rand(0.03, config.opacityMax),
-    color,
   }
 }
 
-export function createParticles(
+export function createParticles(width: number, height: number, state: AppState): Particle[] {
+  const config = PARTICLE_CONFIG[state]
+  return Array.from({ length: config.count }, () => createParticle(width, height, config))
+}
+
+/**
+ * Reconciles the current particle array toward a new state's target count,
+ * WITHOUT resetting positions — adding/removing particles rather than
+ * regenerating the whole field, so a state change never causes a visible
+ * "jump" or full-field reset.
+ */
+export function reconcileParticles(
+  current: Particle[],
   width: number,
   height: number,
-  state: AppState,
-  color: string
+  state: AppState
 ): Particle[] {
   const config = PARTICLE_CONFIG[state]
-  return Array.from({ length: config.count }, () => createParticle(width, height, config, color))
+  if (current.length === config.count) return current
+  if (current.length < config.count) {
+    const toAdd = config.count - current.length
+    return [...current, ...Array.from({ length: toAdd }, () => createParticle(width, height, config))]
+  }
+  return current.slice(0, config.count)
 }
 
 export function stepParticle(p: Particle, width: number, height: number): void {
   p.x += p.vx
   p.y += p.vy
-  // wrap off-screen particles to the opposite edge
   if (p.x < 0) p.x = width
   if (p.x > width) p.x = 0
   if (p.y < 0) p.y = height
