@@ -1,0 +1,54 @@
+/* apps/web/src/styles/tokens.css */
+:root {
+  /* Updated per state via JS — see stateColors.ts (Session 0.5) */
+  --bg: #0a0a1a;
+  --accent: #6655CC;
+  --accent-b: #6655CC;
+  --text-primary: #c8c8e8;
+  --text-secondary: rgba(200, 200, 232, 0.5);
+  --text-tertiary: rgba(200, 200, 232, 0.25);
+
+  /* Static — never change with state */
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --surface-active: rgba(255, 255, 255, 0.10);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-accent: rgba(255, 255, 255, 0.12);
+
+  /* Semantic — never change */
+  --success: #00e5a0;
+  --danger: #ff3366;
+  --warning: #ffaa00;
+  --muted: rgba(255, 255, 255, 0.2);
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Radius scale */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Easing curves */
+  --ease-focus: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-drift: cubic-bezier(0.4, 0, 0.2, 1);
+
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  transition: background-color 800ms var(--ease-focus);
+}

@@ -1,0 +1,15 @@
+/* apps/web/src/styles/globals.css */
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./glass.css";
+@import "./motion.css";
+@import "./typography.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
