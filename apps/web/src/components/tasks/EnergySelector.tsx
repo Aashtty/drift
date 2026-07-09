@@ -9,47 +9,66 @@ interface EnergySelectorProps {
   onChange: (level: EnergyLevel) => void
 }
 
-const OPTIONS: { level: EnergyLevel; icon: string; label: string }[] = [
-  { level: 'low', icon: '🌑', label: 'Low' },
-  { level: 'medium', icon: '🌗', label: 'Medium' },
-  { level: 'high', icon: '🌕', label: 'High' },
+const OPTIONS: { level: EnergyLevel; label: string }[] = [
+  { level: 'low', label: 'Low' },
+  { level: 'medium', label: 'Medium' },
+  { level: 'high', label: 'High' },
 ]
 
 export function EnergySelector({ value, onChange }: EnergySelectorProps) {
   return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
+    <div
+      role="radiogroup"
+      aria-label="Energy level"
+      className="glass"
+      style={{
+        display: 'inline-flex',
+        padding: 3,
+        gap: 2,
+        marginBottom: 4,
+        borderRadius: 'var(--radius-full)',
+      }}
+    >
       {OPTIONS.map((opt) => {
         const selected = opt.level === value
         return (
-          <motion.button
+          <button
             key={opt.level}
             type="button"
-            aria-label={opt.label}
+            role="radio"
+            aria-checked={selected}
             data-testid={`energy-${opt.level}`}
             onClick={() => onChange(opt.level)}
-            whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.93 }}
-            animate={{
-              boxShadow: selected ? 'var(--glow-accent-md)' : '0 0 0 0 transparent',
-              borderColor: selected ? 'var(--accent)' : 'var(--border)',
-              background: selected ? 'var(--surface-active)' : 'var(--surface)',
-              scale: selected ? 1.05 : 1,
-            }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             style={{
-              width: 40,
-              height: 40,
+              position: 'relative',
+              padding: '7px 16px',
               borderRadius: 'var(--radius-full)',
-              border: '1px solid var(--border)',
-              fontSize: 17,
+              border: 'none',
+              background: 'transparent',
+              fontSize: 13,
+              fontFamily: 'var(--font-body)',
+              fontWeight: 500,
+              color: selected ? 'var(--bg)' : 'var(--text-secondary)',
               cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              zIndex: 1,
+              transition: 'color 200ms var(--ease-drift)',
             }}
           >
-            {opt.icon}
-          </motion.button>
+            {selected && (
+              <motion.div
+                layoutId="energy-selector-active"
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'var(--accent)',
+                  borderRadius: 'var(--radius-full)',
+                  zIndex: -1,
+                }}
+              />
+            )}
+            {opt.label}
+          </button>
         )
       })}
     </div>

@@ -14,9 +14,11 @@ interface TaskListProps {
   anchorFor: (task: Task) => Anchor | null
   defaultEnergy?: EnergyLevel
   onTaskStart?: (task: Task) => void
+  onTaskComplete?: (task: Task) => void
+  onTaskSendToLimbo?: (task: Task) => void
 }
 
-export function TaskList({ tasks, anchorFor, defaultEnergy = 'high', onTaskStart }: TaskListProps) {
+export function TaskList({ tasks, anchorFor, defaultEnergy = 'high', onTaskStart, onTaskComplete, onTaskSendToLimbo }: TaskListProps) {
   const [energy, setEnergy] = useState<EnergyLevel>(defaultEnergy)
   const visible = filterByEnergy(tasks, energy)
 
@@ -46,7 +48,13 @@ export function TaskList({ tasks, anchorFor, defaultEnergy = 'high', onTaskStart
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             >
-              <TaskCard task={t} anchor={anchorFor(t)} onClick={() => onTaskStart?.(t)} />
+              <TaskCard
+                task={t}
+                anchor={anchorFor(t)}
+                onClick={() => onTaskStart?.(t)}
+                onToggleComplete={onTaskComplete}
+                onSendToLimbo={onTaskSendToLimbo}
+              />
             </motion.div>
           ))}
         </AnimatePresence>

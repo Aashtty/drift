@@ -8,6 +8,7 @@ import type { Task } from '@/types/task'
 interface ShutdownRitualProps {
   completedTasks: Task[]
   incompleteTasks: Task[]
+  onAddCompletedTask: (name: string) => Promise<Task>
   onComplete: (result: {
     completedTaskIds: string[]
     carriedTaskIds: string[]
@@ -24,12 +25,16 @@ const crossfade = {
   transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const },
 }
 
-export function ShutdownRitual({ completedTasks, incompleteTasks, onComplete }: ShutdownRitualProps) {
+export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompletedTask, onComplete }: ShutdownRitualProps) {
   const [step, setStep] = useState<Step>(1)
+  const [extraCompleted, setExtraCompleted] = useState<Task[]>([])
   const [checked, setChecked] = useState<Set<string>>(new Set(completedTasks.map((t) => t.id)))
   const [extraFinished, setExtraFinished] = useState('')
+  const [adding, setAdding] = useState(false)
   const [carryOver, setCarryOver] = useState<Task[]>(incompleteTasks)
   const [anchorText, setAnchorText] = useState('')
+
+  const allCompleted = [...completedTasks, ...extraCompleted]
 
   function toggleChecked(id: string) {
     setChecked((prev) => {
@@ -40,12 +45,27 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onComplete }: 
     })
   }
 
+  async function handleAddExtra() {
+    const name = extraFinished.trim()
+    if (!name || adding) return
+    setAdding(true)
+    try {
+      const newTask = await onAddCompletedTask(name)
+      setExtraCompleted((prev) => [...prev, newTask])
+      setChecked((prev) => new Set(prev).add(newTask.id))
+      setExtraFinished('')
+    } catch (err) {
+      console.error('Failed to add completed task:', err)
+    } finally {
+      setAdding(false)
+    }
+  }
+
   function goToQ2() {
     setStep(2)
   }
 
   function goToQ3() {
-    // Auto-fill tomorrow's anchor with the top carry-over task, per spec.
     setAnchorText(carryOver[0]?.name ?? '')
     setStep(3)
   }
@@ -84,7 +104,7 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onComplete }: 
               what did you finish today?
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {completedTasks.map((t) => (
+              {allCompleted.map((t) => (
                 <label key={t.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
@@ -97,7 +117,9 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onComplete }: 
               <input
                 value={extraFinished}
                 onChange={(e) => setExtraFinished(e.target.value)}
-                placeholder="[type to add more...]"
+                placeholder={adding ? 'adding...' : '[type to add more, press Enter]'}
+                disabled={adding}
+                data-testid="shutdown-extra-input"
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -107,8 +129,9 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onComplete }: 
                   padding: '4px 0',
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && extraFinished.trim()) {
-                    setExtraFinished('')
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleAddExtra()
                   }
                 }}
               />

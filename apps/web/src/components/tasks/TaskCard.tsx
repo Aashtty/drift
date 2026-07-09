@@ -1,6 +1,7 @@
 // apps/web/src/components/tasks/TaskCard.tsx
 'use client'
 
+import { useState } from 'react'
 import { motion } from 'motion/react'
 import type { Task } from '@/types/task'
 import type { Anchor } from '@/types/anchor'
@@ -10,27 +11,20 @@ interface TaskCardProps {
   anchor?: Anchor | null
   active?: boolean
   onClick?: () => void
+  onToggleComplete?: (task: Task) => void
+  onSendToLimbo?: (task: Task) => void
 }
 
-export function TaskCard({ task, anchor, active = false, onClick }: TaskCardProps) {
+export function TaskCard({ task, anchor, active = false, onClick, onToggleComplete, onSendToLimbo }: TaskCardProps) {
   const anchorColor = anchor?.color ?? 'var(--border)'
+  const [limboHover, setLimboHover] = useState(false)
 
   return (
     <motion.button
       type="button"
       onClick={onClick}
       data-testid="task-card"
-      // Hover glow/lift now lives entirely in CSS (.glass-interactive,
-      // defined in glass.css) instead of being driven by Framer's
-      // whileHover. Framer animating box-shadow means the browser
-      // recomputes and repaints that shadow on every animation frame via
-      // JS-interpolated style updates — expensive, and the actual source
-      // of the lag with multiple cards on screen. A CSS :hover transition
-      // lets the browser handle it natively and far more cheaply.
       className={`${active ? 'glass-chromatic' : 'glass'} glass-interactive`}
-      // Framer kept only for the tap/press feedback — scale is a
-      // transform, which IS compositor-cheap, so this part was never
-      // the problem.
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.12 }}
       style={{
@@ -46,6 +40,26 @@ export function TaskCard({ task, anchor, active = false, onClick }: TaskCardProp
         textAlign: 'left',
       }}
     >
+      {onToggleComplete && (
+        <span
+          role="checkbox"
+          aria-checked={false}
+          aria-label="mark task complete"
+          data-testid="task-complete-toggle"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleComplete(task)
+          }}
+          style={{
+            width: 16,
+            height: 16,
+            flexShrink: 0,
+            borderRadius: 'var(--radius-sm)',
+            border: '1.5px solid var(--border-accent)',
+            cursor: 'pointer',
+          }}
+        />
+      )}
       <span
         style={{
           flex: 1,
@@ -70,6 +84,43 @@ export function TaskCard({ task, anchor, active = false, onClick }: TaskCardProp
           }}
         >
           AES{task.aes_score}
+        </span>
+      )}
+      {onSendToLimbo && (
+        <span
+          role="button"
+          aria-label="not right now — send to limbo"
+          title="not right now"
+          data-testid="task-limbo-toggle"
+          onClick={(e) => {
+            e.stopPropagation()
+            onSendToLimbo(task)
+          }}
+          onMouseEnter={() => setLimboHover(true)}
+          onMouseLeave={() => setLimboHover(false)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 24,
+            height: 24,
+            flexShrink: 0,
+            borderRadius: 'var(--radius-sm)',
+            background: limboHover ? 'var(--surface-active)' : 'var(--surface)',
+            opacity: limboHover ? 1 : 0.65,
+            transition: 'opacity 150ms var(--ease-drift), background 150ms var(--ease-drift)',
+            cursor: 'pointer',
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <path
+              d="M8 2v7.5M8 9.5L5 6.5M8 9.5l3-3M3 12h10"
+              stroke={limboHover ? 'var(--text-primary)' : 'var(--text-secondary)'}
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </span>
       )}
     </motion.button>

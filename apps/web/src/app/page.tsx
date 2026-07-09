@@ -28,7 +28,7 @@ function greeting(): string {
 export default function DashboardPage() {
   const { user } = useUser()
   const router = useRouter()
-  const { tasks, anchorFor } = useTaskEngine(user?.id ?? '')
+  const { tasks, anchorFor, markComplete } = useTaskEngine(user?.id ?? '')
   const { events, refreshManualEvents } = useCalendarBridge(user?.id ?? null)
   useTaskDecay()
 
@@ -103,6 +103,7 @@ export default function DashboardPage() {
             anchorFor={anchorFor}
             defaultEnergy="high"
             onTaskStart={(task) => startTask(task.id, task.name, anchorFor(task)?.name ?? null)}
+            onTaskComplete={(task) => void markComplete(task)}
           />
         </motion.div>
 

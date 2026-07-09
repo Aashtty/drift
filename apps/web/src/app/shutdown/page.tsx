@@ -11,11 +11,16 @@ import { useUser } from '@/hooks/useUser'
 export default function ShutdownPage() {
   const router = useRouter()
   const { user } = useUser()
-  const { tasksByStatus } = useTaskEngine(user?.id ?? '')
+  const { tasksByStatus, addCompletedTask } = useTaskEngine(user?.id ?? '')
   const { transition } = useAppState()
 
   const completedTasks = tasksByStatus('done')
   const incompleteTasks = tasksByStatus('active')
+
+  async function handleAddCompletedTask(name: string) {
+    if (!user) throw new Error('no user')
+    return addCompletedTask(user.id, name)
+  }
 
   async function handleComplete(result: { completedTaskIds: string[]; carriedTaskIds: string[]; anchorText: string }) {
     if (!user) return
@@ -35,5 +40,12 @@ export default function ShutdownPage() {
 
   if (!user) return null
 
-  return <ShutdownRitual completedTasks={completedTasks} incompleteTasks={incompleteTasks} onComplete={handleComplete} />
+  return (
+    <ShutdownRitual
+      completedTasks={completedTasks}
+      incompleteTasks={incompleteTasks}
+      onAddCompletedTask={handleAddCompletedTask}
+      onComplete={handleComplete}
+    />
+  )
 }
