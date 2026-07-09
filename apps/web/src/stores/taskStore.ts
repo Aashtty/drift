@@ -1,7 +1,7 @@
 // apps/web/src/stores/taskStore.ts
 import { create } from 'zustand'
 import { db, type LocalTask } from '@/lib/db/dexie'
-import { upsertTaskRemote, fetchTasksRemote } from '@/lib/db/queries'
+import { upsertTaskRemote, fetchTasksRemote, deleteTaskRemote } from '@/lib/db/queries'
 import type { Task, TaskStatus } from '@/types/task'
 
 interface TaskStoreState {
@@ -20,8 +20,20 @@ async function trySync(task: LocalTask): Promise<void> {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return
     await upsertTaskRemote(task)
     await db.tasks.update(task.id, { _dirty: false })
-  } catch {
-    // stays _dirty: true — will retry on next syncFromRemote() call
+  } catch (err: any) {
+    // Kept minimal but non-silent on purpose — a fully-empty catch here
+    // previously hid a real PGRST204 schema bug for a long time.
+    console.error('[taskStore] task sync failed, staying dirty:', task.id, err?.message ?? err)
+  }
+}
+
+async function tryDelete(id: string): Promise<void> {
+  try {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return
+    await deleteTaskRemote(id)
+    await db.tasks.delete(id) // fully gone locally once remote confirms it
+  } catch (err: any) {
+    console.error('[taskStore] task delete failed, staying pending:', id, err?.message ?? err)
   }
 }
 
@@ -39,9 +51,15 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
       if (typeof navigator !== 'undefined' && !navigator.onLine) return
       const remote = await fetchTasksRemote(userId)
       await db.tasks.bulkPut(remote.map((t) => ({ ...t, _dirty: false })))
-      // push any locally-dirty tasks that didn't make it up yet
+
+      // retry any locally-dirty tasks that didn't make it up yet —
+      // pending deletes and pending upserts need different remote calls
       const dirty = await db.tasks.filter((t) => Boolean(t._dirty)).toArray()
-      for (const t of dirty) await trySync(t)
+      for (const t of dirty) {
+        if (t._deleted) await tryDelete(t.id)
+        else await trySync(t)
+      }
+
       const merged = await db.tasks.filter((t) => !t._deleted).toArray()
       set({ tasks: merged, loaded: true })
     } catch {
@@ -75,7 +93,11 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   },
 
   removeTask: async (id) => {
+    // _dirty stays true so a failed/offline delete gets retried by
+    // syncFromRemote's dirty-loop above instead of silently vanishing
+    // only locally and resurrecting on the next remote fetch.
     await db.tasks.update(id, { _deleted: true, _dirty: true })
     set({ tasks: get().tasks.filter((t) => t.id !== id) })
+    void tryDelete(id)
   },
 }))

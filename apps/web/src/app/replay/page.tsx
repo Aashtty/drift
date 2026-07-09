@@ -7,17 +7,20 @@ import { buildHeatmap, peakHoursWindow, weeklyAverageSessionLength } from '@/lib
 import { HeatmapGrid } from '@/components/replay/HeatmapGrid'
 import { SessionTrendLine } from '@/components/replay/SessionTrendLine'
 import type { FocusSession } from '@/types/session'
-
-const DEV_USER_ID = 'dev-local-user'
+import { useUser } from '@/hooks/useUser'
 
 export default function ReplayPage() {
+  const { user } = useUser()
   const [recentSessions, setRecentSessions] = useState<FocusSession[]>([])
   const [monthSessions, setMonthSessions] = useState<FocusSession[]>([])
 
   useEffect(() => {
-    void fetchSessionsRemote(DEV_USER_ID, 7).then(setRecentSessions).catch(() => setRecentSessions([]))
-    void fetchSessionsRemote(DEV_USER_ID, 28).then(setMonthSessions).catch(() => setMonthSessions([]))
-  }, [])
+    if (!user) return
+    void fetchSessionsRemote(user.id, 7).then(setRecentSessions).catch(() => setRecentSessions([]))
+    void fetchSessionsRemote(user.id, 28).then(setMonthSessions).catch(() => setMonthSessions([]))
+  }, [user])
+
+  if (!user) return null
 
   const cells = buildHeatmap(recentSessions)
   const peak = peakHoursWindow(cells)

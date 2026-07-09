@@ -22,3 +22,17 @@
 .animate-scale-in {
   animation: scale-in 300ms var(--ease-spring) both;
 }
+
+/* Global reduced-motion override — collapses every CSS animation/transition
+   to near-instant. The particle canvas's own JS loop is separately gated
+   in ParticleCanvas.tsx since it isn't CSS-driven. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

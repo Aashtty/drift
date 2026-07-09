@@ -10,7 +10,7 @@
     "package": "plasmo package"
   },
   "dependencies": {
-    "plasmo": "^0.90.5",
+    "plasmo": "0.90.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

@@ -1,16 +1,24 @@
 /* apps/web/src/styles/glass.css */
 .glass {
   background: var(--surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  /* Blur pushed way down — 6px is basically just edge anti-aliasing,
+     not real gaussian softening. This is the main lever for "punchier,
+     less blurry": at 20-44px the panels were smearing the vivid blob
+     color behind them into flat gray. */
+  backdrop-filter: blur(6px) saturate(200%);
+  -webkit-backdrop-filter: blur(6px) saturate(200%);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  transition: background 300ms var(--ease-out-expo),
+              border-color 300ms var(--ease-out-expo),
+              box-shadow 300ms var(--ease-out-expo),
+              transform 300ms var(--ease-spring);
 }
 
 .glass-chromatic {
   background: var(--surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(6px) saturate(200%);
+  -webkit-backdrop-filter: blur(6px) saturate(200%);
   border-radius: var(--radius-lg);
   position: relative;
   border: 1px solid transparent;
@@ -28,7 +36,7 @@
     var(--accent)
   );
   z-index: -1;
-  opacity: 0.6;
+  opacity: 0.75;
   animation: chromatic-spin 4s linear infinite;
 }
 
@@ -40,4 +48,31 @@
 
 @keyframes chromatic-spin {
   to { --border-angle: 360deg; }
+}
+
+.glass-interactive {
+  cursor: pointer;
+}
+.glass-interactive:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-accent);
+  box-shadow: var(--glow-accent-md);
+  transform: translateY(-2px);
+}
+.glass-interactive:active {
+  transform: translateY(0px) scale(0.99);
+}
+
+.glow-ring-active {
+  box-shadow: var(--glow-accent-md);
+  animation: glow-pulse 3s var(--ease-focus) infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: var(--glow-accent-sm); }
+  50% { box-shadow: var(--glow-accent-lg); }
+}
+
+.text-glow {
+  text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent);
 }

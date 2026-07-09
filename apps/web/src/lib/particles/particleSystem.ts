@@ -17,62 +17,61 @@ interface ParticleConfig {
   sizeMax: number
 }
 
+// Softer pass: fewer, slower, smaller-max particles, rendered with blur
+// in ParticleCanvas (glow instead of hard dots) — see softBlurPx there.
+// apps/web/src/lib/particles/particleSystem.ts — only PARTICLE_CONFIG changes, rest identical
 export const PARTICLE_CONFIG: Record<AppState, ParticleConfig> = {
-  IDLE: { count: 40, opacityMax: 0.04, speedMax: 0.15, sizeMax: 4 },
-  FOCUS: { count: 50, opacityMax: 0.06, speedMax: 0.20, sizeMax: 4 },
-  FLOW: { count: 60, opacityMax: 0.08, speedMax: 0.25, sizeMax: 5 },
-  DRIFT: { count: 30, opacityMax: 0.03, speedMax: 0.10, sizeMax: 3 },
-  SHUTDOWN: { count: 20, opacityMax: 0.02, speedMax: 0.08, sizeMax: 3 },
+  IDLE: { count: 55, opacityMax: 0.28, speedMax: 0.16, sizeMax: 6 },
+  FOCUS: { count: 65, opacityMax: 0.32, speedMax: 0.2, sizeMax: 7 },
+  FLOW: { count: 75, opacityMax: 0.38, speedMax: 0.25, sizeMax: 8 },
+  DRIFT: { count: 40, opacityMax: 0.22, speedMax: 0.12, sizeMax: 5 },
+  SHUTDOWN: { count: 26, opacityMax: 0.15, speedMax: 0.1, sizeMax: 4 },
 }
-
 function rand(min: number, max: number): number {
   return Math.random() * (max - min) + min
 }
 
-export function createParticle(width: number, height: number, config: ParticleConfig): Particle {
+// x/y stored as 0–1 fractions of canvas size, not raw pixels — this is
+// what makes particles reposition correctly and smoothly on window
+// resize instead of bunching in a corner (see ParticleCanvas's resize
+// handler, which now just re-reads these fractions against the new
+// width/height rather than needing to regenerate or rescale anything).
+export function createParticle(config: ParticleConfig): Particle {
   return {
-    x: rand(0, width),
-    y: rand(0, height),
-    vx: rand(-config.speedMax, config.speedMax),
-    vy: rand(-config.speedMax, config.speedMax),
-    size: rand(1.5, config.sizeMax),
-    opacity: rand(0.03, config.opacityMax),
+    x: rand(0, 1),
+    y: rand(0, 1),
+    vx: rand(-config.speedMax, config.speedMax) / 1000,
+    vy: rand(-config.speedMax, config.speedMax) / 1000,
+    size: rand(2, config.sizeMax),
+    opacity: rand(0.06, config.opacityMax),
   }
 }
 
-export function createParticles(width: number, height: number, state: AppState): Particle[] {
+export function createParticles(state: AppState): Particle[] {
   const config = PARTICLE_CONFIG[state]
-  return Array.from({ length: config.count }, () => createParticle(width, height, config))
+  return Array.from({ length: config.count }, () => createParticle(config))
 }
 
-/**
- * Reconciles the current particle array toward a new state's target count,
- * WITHOUT resetting positions — adding/removing particles rather than
- * regenerating the whole field, so a state change never causes a visible
- * "jump" or full-field reset.
- */
-export function reconcileParticles(
-  current: Particle[],
-  width: number,
-  height: number,
-  state: AppState
-): Particle[] {
+export function reconcileParticles(current: Particle[], state: AppState): Particle[] {
   const config = PARTICLE_CONFIG[state]
   if (current.length === config.count) return current
   if (current.length < config.count) {
     const toAdd = config.count - current.length
-    return [...current, ...Array.from({ length: toAdd }, () => createParticle(width, height, config))]
+    return [...current, ...Array.from({ length: toAdd }, () => createParticle(config))]
   }
   return current.slice(0, config.count)
 }
 
-export function stepParticle(p: Particle, width: number, height: number): void {
+// Operates on fractional coordinates now — width/height no longer
+// needed here at all, which is what makes resize "live": the canvas can
+// change size every frame and particles are already in the right place.
+export function stepParticle(p: Particle): void {
   p.x += p.vx
   p.y += p.vy
-  if (p.x < 0) p.x = width
-  if (p.x > width) p.x = 0
-  if (p.y < 0) p.y = height
-  if (p.y > height) p.y = 0
+  if (p.x < 0) p.x = 1
+  if (p.x > 1) p.x = 0
+  if (p.y < 0) p.y = 1
+  if (p.y > 1) p.y = 0
 }
 
 function hexToRgb(hex: string): [number, number, number] {

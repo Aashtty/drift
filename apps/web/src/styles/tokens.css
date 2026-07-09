@@ -1,27 +1,35 @@
-/* apps/web/src/styles/tokens.css */
+/* apps/web/src/styles/tokens.css — IDLE defaults section only, rest identical to last version */
 :root {
-  /* Updated per state via JS — see stateColors.ts (Session 0.5) */
-  --bg: #0a0a1a;
-  --accent: #6655CC;
-  --accent-b: #6655CC;
-  --text-primary: #c8c8e8;
-  --text-secondary: rgba(200, 200, 232, 0.5);
-  --text-tertiary: rgba(200, 200, 232, 0.25);
+  --bg: #0d0d22;
+  --accent: #9977ff;
+  --accent-b: #7799ff;
+  --text-primary: #e4e2ff;
+  --text-secondary: rgba(228, 226, 255, 0.58);
+  --text-tertiary: rgba(228, 226, 255, 0.3);
 
-  /* Static — never change with state */
-  --surface: rgba(255, 255, 255, 0.04);
-  --surface-hover: rgba(255, 255, 255, 0.07);
-  --surface-active: rgba(255, 255, 255, 0.10);
-  --border: rgba(255, 255, 255, 0.06);
-  --border-accent: rgba(255, 255, 255, 0.12);
+  --surface: rgba(255, 255, 255, 0.055);
+  --surface-hover: rgba(255, 255, 255, 0.095);
+  --surface-active: rgba(255, 255, 255, 0.135);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-accent: rgba(255, 255, 255, 0.2);
 
-  /* Semantic — never change */
   --success: #00e5a0;
   --danger: #ff3366;
   --warning: #ffaa00;
   --muted: rgba(255, 255, 255, 0.2);
 
-  /* Spacing scale */
+  --ambient-1: #9977ff;
+  --ambient-2: #5599ff;
+  --ambient-3: #dd66ff;
+
+  --glow-accent-sm: 0 0 14px -2px color-mix(in srgb, var(--accent) 65%, transparent);
+  --glow-accent-md: 0 0 36px -5px color-mix(in srgb, var(--accent) 65%, transparent),
+                    0 0 10px -2px color-mix(in srgb, var(--accent) 45%, transparent);
+  --glow-accent-lg: 0 0 70px -8px color-mix(in srgb, var(--accent) 70%, transparent),
+                    0 0 26px -4px color-mix(in srgb, var(--accent) 50%, transparent);
+  --glow-success: 0 0 24px -4px color-mix(in srgb, var(--success) 60%, transparent);
+  --glow-danger: 0 0 24px -4px color-mix(in srgb, var(--danger) 60%, transparent);
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -31,14 +39,12 @@
   --space-7: 48px;
   --space-8: 64px;
 
-  /* Radius scale */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* Easing curves */
   --ease-focus: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);

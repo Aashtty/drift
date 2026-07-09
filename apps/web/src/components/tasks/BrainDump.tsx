@@ -1,21 +1,29 @@
-// apps/web/src/components/tasks/BrainDump.tsx
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useGlobalShortcut } from '@/hooks/useGlobalShortcut'
 import { fadeUp } from '@/lib/utils/motionVariants'
 
 interface BrainDumpProps {
   onSubmit: (rawText: string) => void
+  forceOpen?: boolean
+  onForceOpenHandled?: () => void
 }
 
-export function BrainDump({ onSubmit }: BrainDumpProps) {
+export function BrainDump({ onSubmit, forceOpen, onForceOpenHandled }: BrainDumpProps) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
 
   const openOverlay = useCallback(() => setOpen(true), [])
   useGlobalShortcut(openOverlay)
+
+  useEffect(() => {
+    if (forceOpen) {
+      setOpen(true)
+      onForceOpenHandled?.()
+    }
+  }, [forceOpen, onForceOpenHandled])
 
   function handleSubmit() {
     const trimmed = text.trim()
@@ -40,12 +48,8 @@ export function BrainDump({ onSubmit }: BrainDumpProps) {
         <motion.div
           data-testid="brain-dump-overlay"
           style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            position: 'fixed', inset: 0, zIndex: 100,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'rgba(0,0,0,0.4)',
           }}
           initial={{ opacity: 0 }}
@@ -69,15 +73,9 @@ export function BrainDump({ onSubmit }: BrainDumpProps) {
               onKeyDown={handleKeyDown}
               placeholder="what's on your mind..."
               style={{
-                width: '100%',
-                height: '100%',
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                resize: 'none',
-                color: 'var(--text-primary)',
-                fontSize: 16,
-                fontFamily: 'var(--font-body)',
+                width: '100%', height: '100%', background: 'transparent', border: 'none',
+                outline: 'none', resize: 'none', color: 'var(--text-primary)',
+                fontSize: 16, fontFamily: 'var(--font-body)',
               }}
             />
           </motion.div>

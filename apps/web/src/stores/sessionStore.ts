@@ -24,6 +24,33 @@ interface SessionStoreState {
   clearSummary: () => void
 }
 
+// Supabase's FK error code — can fire if a task was just created locally
+// and its background upsertTaskRemote() (fire-and-forget in
+// taskStore.addTask) hasn't landed yet by the time a session references
+// it. Short retry resolves this timing race without failing the write.
+const FK_VIOLATION = '23503'
+const RETRY_DELAYS_MS = [400, 900, 1600] // ~3s total worst case
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function insertSessionWithRetry(
+  args: Parameters<typeof insertSessionRemote>[0]
+): Promise<void> {
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      await insertSessionRemote(args)
+      return
+    } catch (err: any) {
+      const isFkRace = err?.code === FK_VIOLATION
+      const hasRetriesLeft = attempt < RETRY_DELAYS_MS.length
+      if (!isFkRace || !hasRetriesLeft) throw err
+      await delay(RETRY_DELAYS_MS[attempt])
+    }
+  }
+}
+
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   active: null,
   lastSummary: null,
@@ -51,23 +78,28 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     const endedAt = new Date().toISOString()
 
-    await insertSessionRemote({
-      userId,
-      taskId: active.taskId,
-      startedAt: active.startedAt,
-      endedAt,
-      durationSeconds: elapsedSeconds,
-      baseDurationSeconds: active.baseDurationSeconds,
-      exceededBase: elapsedSeconds > active.baseDurationSeconds,
-      flowDetected,
-      hyperfocus: active.hyperfocus,
-      stateAtEnd,
-    })
-
-    set({
-      active: null,
-      lastSummary: { durationSeconds: elapsedSeconds, taskId: active.taskId },
-    })
+    try {
+      await insertSessionWithRetry({
+        userId,
+        taskId: active.taskId,
+        startedAt: active.startedAt,
+        endedAt,
+        durationSeconds: elapsedSeconds,
+        baseDurationSeconds: active.baseDurationSeconds,
+        exceededBase: elapsedSeconds > active.baseDurationSeconds,
+        flowDetected,
+        hyperfocus: active.hyperfocus,
+        stateAtEnd,
+      })
+    } finally {
+      // Always clear active + set summary, even if the remote write
+      // ultimately failed after retries — a lost analytics row should
+      // never trap the user on /now unable to end their session.
+      set({
+        active: null,
+        lastSummary: { durationSeconds: elapsedSeconds, taskId: active.taskId },
+      })
+    }
   },
 
   clearSummary: () => set({ lastSummary: null }),

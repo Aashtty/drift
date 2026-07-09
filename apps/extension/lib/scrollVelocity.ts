@@ -4,7 +4,7 @@ export interface ScrollSample {
   timestampMs: number
 }
 
-const VELOCITY_THRESHOLD_PX_PER_MIN = 300
+const VELOCITY_THRESHOLD_PX_PER_MIN = 3
 const SUSTAINED_MS = 10 * 1000 // 8 minutes
 
 export interface VelocityState {
