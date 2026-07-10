@@ -1,9 +1,11 @@
+// apps/web/src/components/core/AppShell.tsx
 'use client'
 
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { BrainDump } from '@/components/tasks/BrainDump'
+import { CaptureButton } from '@/components/core/CaptureButton'
 import { Sidebar } from '@/components/core/Sidebar'
 import { Onboarding } from '@/components/onboarding/Onboarding'
 import { ShortcutCheatSheet } from '@/components/core/ShortcutCheatSheet'
@@ -29,6 +31,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname)
   const hideSidebar = NO_SIDEBAR_ROUTES.some((r) => pathname.startsWith(r)) || isPublicRoute
+  const showCapture = Boolean(user) && !isPublicRoute && !showOnboarding && !hideSidebar
 
   useEffect(() => {
     if (!loading && !user && !isPublicRoute) router.push('/login')
@@ -67,6 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           onForceOpenHandled={() => setBrainDumpOpenFromOnboarding(false)}
         />
       )}
+      {showCapture && <CaptureButton />}
       <ShortcutCheatSheet open={cheatSheet.open} onClose={() => cheatSheet.setOpen(false)} />
     </>
   )

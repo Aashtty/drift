@@ -89,7 +89,7 @@ export function TaskCard({ task, anchor, active = false, onClick, onToggleComple
       {onSendToLimbo && (
         <span
           role="button"
-          aria-label="not right now — send to limbo"
+          aria-label="not right now — snooze to limbo"
           title="not right now"
           data-testid="task-limbo-toggle"
           onClick={(e) => {
@@ -112,13 +112,21 @@ export function TaskCard({ task, anchor, active = false, onClick, onToggleComple
             cursor: 'pointer',
           }}
         >
+          {/* clock/snooze glyph — "deal with this later," unambiguous vs. a download arrow */}
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8.5" r="5.5" stroke={limboHover ? 'var(--text-primary)' : 'var(--text-secondary)'} strokeWidth="1.3" />
             <path
-              d="M8 2v7.5M8 9.5L5 6.5M8 9.5l3-3M3 12h10"
+              d="M8 5.5V8.5L10 10"
               stroke={limboHover ? 'var(--text-primary)' : 'var(--text-secondary)'}
-              strokeWidth="1.4"
+              strokeWidth="1.3"
               strokeLinecap="round"
               strokeLinejoin="round"
+            />
+            <path
+              d="M6 1.5h4"
+              stroke={limboHover ? 'var(--text-primary)' : 'var(--text-secondary)'}
+              strokeWidth="1.3"
+              strokeLinecap="round"
             />
           </svg>
         </span>

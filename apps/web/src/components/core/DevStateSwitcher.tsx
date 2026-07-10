@@ -9,10 +9,6 @@ const STATES: AppState[] = ['IDLE', 'FOCUS', 'FLOW', 'DRIFT', 'SHUTDOWN']
 export function DevStateSwitcher() {
   const { state, setState } = useAppState()
 
-  // Double-gated: this component is also only ever imported behind a
-  // `process.env.NODE_ENV !== 'production'` check at the call site (see
-  // page.tsx), but gating itself too means it's safe even if some future
-  // session accidentally mounts it somewhere else.
   if (process.env.NODE_ENV === 'production') return null
 
   return (
