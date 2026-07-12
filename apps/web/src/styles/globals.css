@@ -1,4 +1,4 @@
-/* apps/web/src/styles/globals.css — add the new import */
+/* apps/web/src/styles/globals.css */
 @import "tailwindcss";
 @import "./tokens.css";
 @import "./glass.css";
@@ -13,6 +13,10 @@
 html, body {
   margin: 0;
   padding: 0;
+}
+
+button {
+  font-family: inherit;
 }
 
 button:focus-visible,

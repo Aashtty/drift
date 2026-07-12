@@ -17,25 +17,25 @@ interface NowBarProps {
   phase: TimerPhase
   justPulsed: boolean
   appState: AppState
-  /** True while a save is in flight for Done/End — disables both buttons
-   *  so a slow connection can't produce a double-submit. */
+  paused: boolean
+  /** True while Done/End's save is in flight — disables the dock so a
+   *  slow connection can't produce a double-submit. */
   ending?: boolean
+  /** Today's total focus time in seconds, including the live session —
+   *  shown as a small ambient readout under the timer ring. Omit or
+   *  pass null to hide it (e.g. while it's still loading). */
+  todayFocusedSeconds?: number | null
   onDone: () => void
-  /**
-   * Ends the session without marking the task complete. Previously
-   * called `onPause`, but nothing about it was actually pausable —
-   * it called the same `endSession` as onBackToDashboard. Renamed the
-   * prop (and the button copy) to match what it really does, rather
-   * than implying resumability that doesn't exist.
-   */
+  /** Ends the session — saves progress, does NOT mark the task done.
+   *  Always safe to click: nothing about leaving discards data, so this
+   *  no longer needs a two-step confirm. */
   onEnd: () => void
   onLockIn: () => void
-  onBackToDashboard?: () => void
+  onTogglePause: () => void
   onRename?: (newName: string) => void
 }
 
 const ENCOURAGEMENT = ['still with it', 'good pace', 'no rush', 'keep going', 'in the zone']
-const CONFIRM_AUTO_REVERT_MS = 6000
 
 function LockIcon() {
   return (
@@ -45,13 +45,18 @@ function LockIcon() {
     </svg>
   )
 }
-function StopIcon() {
-  // Square stop glyph replaces the old pause (two bars) icon — matches
-  // the honest "this ends the session" semantics instead of implying
-  // a resumable pause.
+function PauseIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-      <rect x="1.5" y="1.5" width="11" height="11" rx="2" fill="currentColor" />
+    <svg width="12" height="13" viewBox="0 0 14 16" fill="none">
+      <rect x="2" y="1.5" width="3.2" height="13" rx="1" fill="currentColor" />
+      <rect x="8.8" y="1.5" width="3.2" height="13" rx="1" fill="currentColor" />
+    </svg>
+  )
+}
+function PlayIcon() {
+  return (
+    <svg width="12" height="13" viewBox="0 0 14 16" fill="none">
+      <path d="M2.5 1.8v12.4a1 1 0 0 0 1.5.87l10.5-6.2a1 1 0 0 0 0-1.74L4 .93a1 1 0 0 0-1.5.87Z" fill="currentColor" />
     </svg>
   )
 }
@@ -59,6 +64,14 @@ function CheckIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
       <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function ExitIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+      <path d="M6.5 3L2.5 8L6.5 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2.8 8H13.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   )
 }
@@ -71,19 +84,19 @@ export function NowBar({
   phase,
   justPulsed,
   appState,
+  paused,
   ending = false,
+  todayFocusedSeconds = null,
   onDone,
   onEnd,
   onLockIn,
-  onBackToDashboard,
+  onTogglePause,
   onRename,
 }: NowBarProps) {
-  const [confirmEnd, setConfirmEnd] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [draftName, setDraftName] = useState(taskName)
   const [encouragementIndex, setEncouragementIndex] = useState(0)
   const nameInputRef = useRef<HTMLInputElement>(null)
-  const confirmRevertRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const brainDumpOpen = useBrainDumpUI((s) => s.open)
   const setBrainDumpOpen = useBrainDumpUI((s) => s.setOpen)
   const inFlow = phase === 'FLOW'
@@ -97,27 +110,23 @@ export function NowBar({
     if (isEditingName) nameInputRef.current?.focus()
   }, [isEditingName])
 
-  function openConfirmEnd() {
-    setConfirmEnd(true)
-    if (confirmRevertRef.current) clearTimeout(confirmRevertRef.current)
-    confirmRevertRef.current = setTimeout(() => setConfirmEnd(false), CONFIRM_AUTO_REVERT_MS)
-  }
-  function closeConfirmEnd() {
-    setConfirmEnd(false)
-    if (confirmRevertRef.current) clearTimeout(confirmRevertRef.current)
-  }
-  useEffect(() => () => {
-    if (confirmRevertRef.current) clearTimeout(confirmRevertRef.current)
-  }, [])
-
   useEffect(() => {
-    if (!inFlow) return
+    if (!inFlow || paused) return
     const t = setInterval(() => {
       setEncouragementIndex((i) => (i + 1) % ENCOURAGEMENT.length)
     }, 90_000)
     return () => clearInterval(t)
-  }, [inFlow])
+  }, [inFlow, paused])
 
+  // Keyboard shortcuts:
+  //   L      lock in (disabled while paused — locking in mid-pause
+  //          doesn't mean anything, since there's nothing to shield)
+  //   Space  pause / resume — the standard media-player convention,
+  //          replaces the old confirm-to-exit flow entirely
+  //   D      mark done
+  //   Esc    end session — single press, no confirm step, because
+  //          ending always saves progress; there's nothing destructive
+  //          left to guard against
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -125,19 +134,20 @@ export function NowBar({
       const target = e.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return
 
-      const key = e.key.toLowerCase()
-      if (key === 'l' && sessionActive) {
+      if (e.key === ' ') {
+        e.preventDefault()
+        onTogglePause()
+      } else if (e.key.toLowerCase() === 'l' && sessionActive && !paused) {
         onLockIn()
-      } else if (key === 'd') {
+      } else if (e.key.toLowerCase() === 'd') {
         onDone()
-      } else if (e.key === 'Escape' || key === 'p') {
-        if (confirmEnd) onEnd()
-        else openConfirmEnd()
+      } else if (e.key === 'Escape') {
+        onEnd()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [sessionActive, onDone, onLockIn, onEnd, brainDumpOpen, isEditingName, confirmEnd, ending])
+  }, [sessionActive, paused, onDone, onLockIn, onEnd, onTogglePause, brainDumpOpen, isEditingName, ending])
 
   function commitRename() {
     const trimmed = draftName.trim()
@@ -161,6 +171,7 @@ export function NowBar({
   }
 
   const flowElapsedMinutes = inFlow ? Math.max(0, Math.floor((elapsedSeconds - baseDurationSeconds) / 60)) : 0
+  const minutesToFlow = !inFlow ? Math.max(0, Math.ceil((baseDurationSeconds - elapsedSeconds) / 60)) : 0
   const safeLeft = 'max(56px, 260px)'
 
   return (
@@ -168,7 +179,7 @@ export function NowBar({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 20,
+        zIndex: 'var(--z-nav)' as any,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
@@ -178,6 +189,7 @@ export function NowBar({
       }}
       data-testid="now-bar"
       data-phase={phase}
+      data-paused={paused}
     >
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -185,36 +197,13 @@ export function NowBar({
         transition={{ delay: 0.25, duration: 0.5 }}
         style={{ position: 'fixed', top: 40, left: safeLeft, display: 'flex', gap: 8, pointerEvents: 'auto' }}
       >
-        {onBackToDashboard && (
-          <button
-            type="button"
-            data-testid="back-to-dashboard-button"
-            onClick={onBackToDashboard}
-            disabled={ending}
-            className="glass"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              height: 32,
-              padding: '0 14px',
-              border: 'none',
-              borderRadius: 'var(--radius-full)',
-              color: 'var(--text-secondary)',
-              fontSize: 12.5,
-              cursor: ending ? 'default' : 'pointer',
-              opacity: ending ? 0.5 : 0.8,
-            }}
-          >
-            ← dashboard
-          </button>
-        )}
         <button
           type="button"
-          data-testid="quick-capture-button"
-          onClick={() => setBrainDumpOpen(true)}
-          title="quick capture"
-          className="glass"
+          data-testid="end-session-button"
+          onClick={onEnd}
+          disabled={ending}
+          title="End session (Esc) — saves your progress, doesn't mark the task done"
+          className="glass glass-interactive"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -222,7 +211,27 @@ export function NowBar({
             height: 32,
             padding: '0 14px',
             border: 'none',
-            borderRadius: 'var(--radius-full)',
+            color: 'var(--text-secondary)',
+            fontSize: 12.5,
+            cursor: ending ? 'default' : 'pointer',
+            opacity: ending ? 0.5 : 0.85,
+          }}
+        >
+          <ExitIcon /> end session
+        </button>
+        <button
+          type="button"
+          data-testid="quick-capture-button"
+          onClick={() => setBrainDumpOpen(true)}
+          title="quick capture"
+          className="glass glass-interactive"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            height: 32,
+            padding: '0 14px',
+            border: 'none',
             color: 'var(--accent)',
             fontSize: 12.5,
             cursor: 'pointer',
@@ -255,7 +264,7 @@ export function NowBar({
           data-testid="now-bar-task-name-input"
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(36px, 5vw, 72px)',
+            fontSize: 'var(--text-3xl)',
             fontWeight: 600,
             lineHeight: 1.1,
             color: 'var(--text-primary)',
@@ -277,16 +286,18 @@ export function NowBar({
           title={onRename ? 'click to rename' : undefined}
           initial={{ opacity: 0, y: 16 }}
           animate={{
-            opacity: 1,
+            opacity: paused ? 0.7 : 1,
             y: 0,
-            textShadow: inFlow
+            textShadow: paused
+              ? 'none'
+              : inFlow
               ? '0 0 64px color-mix(in srgb, var(--accent) 60%, transparent), 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent)'
               : '0 0 32px color-mix(in srgb, var(--accent) 35%, transparent)',
           }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(36px, 5vw, 72px)',
+            fontSize: 'var(--text-3xl)',
             fontWeight: 600,
             lineHeight: 1.1,
             color: 'var(--text-primary)',
@@ -310,13 +321,36 @@ export function NowBar({
       >
         <motion.p
           className="text-elapsed"
-          animate={inFlow ? { scale: [1, 1.04, 1] } : {}}
-          transition={inFlow ? { duration: 2.5, repeat: Infinity, ease: 'easeInOut' } : {}}
-          style={{ transformOrigin: 'left center', fontSize: 18 }}
+          animate={inFlow && !paused ? { scale: [1, 1.04, 1] } : {}}
+          transition={inFlow && !paused ? { duration: 2.5, repeat: Infinity, ease: 'easeInOut' } : {}}
+          style={{ transformOrigin: 'left center', fontSize: 18, opacity: paused ? 0.6 : 1 }}
         >
           {formatElapsed(elapsedSeconds)}
         </motion.p>
-        {inFlow && (
+
+        {paused && (
+          <span
+            className="text-micro-mono"
+            data-testid="paused-badge"
+            style={{
+              color: 'var(--text-tertiary)',
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--surface-active)',
+              letterSpacing: '0.06em',
+            }}
+          >
+            PAUSED
+          </span>
+        )}
+
+        {!paused && !inFlow && minutesToFlow > 0 && (
+          <span className="text-meta" style={{ fontSize: 12, opacity: 0.55 }}>
+            flow in ~{minutesToFlow}m
+          </span>
+        )}
+
+        {!paused && inFlow && (
           <>
             <motion.span
               initial={{ opacity: 0 }}
@@ -350,14 +384,27 @@ export function NowBar({
         )}
       </motion.div>
 
-      <div style={{ position: 'fixed', top: 40, right: 56 }}>
+      <div style={{ position: 'fixed', top: 40, right: 56, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
         <TimerRing
           elapsedSeconds={elapsedSeconds}
           baseDurationSeconds={baseDurationSeconds}
           justPulsed={justPulsed}
           state={appState}
+          paused={paused}
           size={72}
         />
+        {todayFocusedSeconds != null && todayFocusedSeconds > 0 && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.55 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+            className="text-micro-mono"
+            title="Total focus time today, including this session"
+            data-testid="today-focused-readout"
+          >
+            {Math.floor(todayFocusedSeconds / 60)}m today
+          </motion.p>
+        )}
       </div>
 
       <motion.div
@@ -384,8 +431,8 @@ export function NowBar({
             type="button"
             data-testid="lock-in-button"
             onClick={onLockIn}
-            disabled={ending}
-            title="Lock in (L)"
+            disabled={ending || paused}
+            title={paused ? 'resume first to lock in' : 'Lock in (L)'}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -395,19 +442,20 @@ export function NowBar({
               border: 'none',
               borderRadius: 'var(--radius-full)',
               background: 'transparent',
-              color: inFlow ? 'var(--accent)' : 'var(--text-secondary)',
+              color: paused ? 'var(--text-tertiary)' : inFlow ? 'var(--accent)' : 'var(--text-secondary)',
               fontSize: 13,
-              cursor: ending ? 'default' : 'pointer',
+              cursor: ending || paused ? 'default' : 'pointer',
+              opacity: paused ? 0.5 : 1,
               transition: 'background 200ms var(--ease-out-expo), color 200ms var(--ease-out-expo)',
             }}
             onMouseEnter={(e) => {
-              if (ending) return
+              if (ending || paused) return
               e.currentTarget.style.background = 'var(--surface-hover)'
               e.currentTarget.style.color = 'var(--text-primary)'
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = inFlow ? 'var(--accent)' : 'var(--text-secondary)'
+              e.currentTarget.style.color = paused ? 'var(--text-tertiary)' : inFlow ? 'var(--accent)' : 'var(--text-secondary)'
             }}
           >
             <LockIcon /> Lock in
@@ -416,90 +464,38 @@ export function NowBar({
 
         <div style={{ width: 1, height: 24, background: 'var(--border)' }} />
 
-        <AnimatePresence mode="wait" initial={false}>
-          {!confirmEnd ? (
-            <motion.button
-              key="end-prompt"
-              type="button"
-              data-testid="pause-button"
-              onClick={openConfirmEnd}
-              disabled={ending}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              title="End session (Esc or P) — progress is saved, but you can't resume"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-                height: 40,
-                padding: '0 16px',
-                border: 'none',
-                borderRadius: 'var(--radius-full)',
-                background: 'transparent',
-                color: 'var(--text-secondary)',
-                fontSize: 13,
-                cursor: ending ? 'default' : 'pointer',
-              }}
-              onMouseEnter={(e) => {
-                if (ending) return
-                e.currentTarget.style.background = 'var(--surface-hover)'
-                e.currentTarget.style.color = 'var(--text-primary)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = 'var(--text-secondary)'
-              }}
-            >
-              <StopIcon /> End session
-            </motion.button>
-          ) : (
-            <motion.div
-              key="confirm-group"
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.15 }}
-              style={{ display: 'flex', gap: 4 }}
-            >
-              <button
-                type="button"
-                onClick={closeConfirmEnd}
-                disabled={ending}
-                style={{
-                  height: 40,
-                  padding: '0 14px',
-                  border: 'none',
-                  borderRadius: 'var(--radius-full)',
-                  background: 'transparent',
-                  color: 'var(--text-tertiary)',
-                  fontSize: 13,
-                  cursor: ending ? 'default' : 'pointer',
-                }}
-              >
-                back
-              </button>
-              <button
-                type="button"
-                onClick={onEnd}
-                disabled={ending}
-                title="Esc again to confirm"
-                style={{
-                  height: 40,
-                  padding: '0 16px',
-                  border: 'none',
-                  borderRadius: 'var(--radius-full)',
-                  background: 'var(--surface-active)',
-                  color: 'var(--text-secondary)',
-                  fontSize: 13,
-                  cursor: ending ? 'default' : 'pointer',
-                }}
-              >
-                {ending ? 'ending…' : 'confirm end'}
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <button
+          type="button"
+          data-testid="pause-toggle-button"
+          onClick={onTogglePause}
+          disabled={ending}
+          title={paused ? 'Resume (Space)' : 'Pause (Space)'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            height: 40,
+            padding: '0 16px',
+            border: 'none',
+            borderRadius: 'var(--radius-full)',
+            background: paused ? 'var(--surface-active)' : 'transparent',
+            color: paused ? 'var(--warning)' : 'var(--text-secondary)',
+            fontSize: 13,
+            cursor: ending ? 'default' : 'pointer',
+            transition: 'background 200ms var(--ease-out-expo), color 200ms var(--ease-out-expo)',
+          }}
+          onMouseEnter={(e) => {
+            if (ending) return
+            e.currentTarget.style.background = 'var(--surface-hover)'
+            e.currentTarget.style.color = 'var(--text-primary)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = paused ? 'var(--surface-active)' : 'transparent'
+            e.currentTarget.style.color = paused ? 'var(--warning)' : 'var(--text-secondary)'
+          }}
+        >
+          {paused ? <PlayIcon /> : <PauseIcon />} {paused ? 'Resume' : 'Pause'}
+        </button>
 
         <div style={{ width: 1, height: 24, background: 'var(--border)' }} />
 

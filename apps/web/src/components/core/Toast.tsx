@@ -5,12 +5,6 @@ import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useToastStore, type ToastItem } from '@/stores/toastStore'
 
-// This is the single most important addition to the whole app: before
-// this existed, every failed save (a session that didn't record, an
-// event that didn't delete, a shutdown that didn't persist) just logged
-// to a console nobody opens and then acted as if it had succeeded. Now
-// every one of those call sites surfaces here instead of vanishing.
-
 function ToastIcon({ variant }: { variant: ToastItem['variant'] }) {
   if (variant === 'success') {
     return (
@@ -52,6 +46,11 @@ function ToastRow({ toast }: { toast: ToastItem }) {
   const borderColor =
     toast.variant === 'error' ? 'var(--danger)' : toast.variant === 'success' ? 'var(--success)' : 'var(--border-accent)'
 
+  function handleAction() {
+    toast.action?.onClick()
+    dismiss(toast.id)
+  }
+
   return (
     <motion.div
       layout
@@ -70,7 +69,7 @@ function ToastRow({ toast }: { toast: ToastItem }) {
         borderRadius: 12,
         border: `1px solid ${borderColor}`,
         minWidth: 220,
-        maxWidth: 360,
+        maxWidth: 380,
         boxShadow: '0 8px 28px rgba(0,0,0,0.35)',
       }}
     >
@@ -78,19 +77,32 @@ function ToastRow({ toast }: { toast: ToastItem }) {
         <ToastIcon variant={toast.variant} />
       </span>
       <span style={{ fontSize: 13, color: 'var(--text-primary)', flex: 1, lineHeight: 1.4 }}>{toast.message}</span>
+      {toast.action && (
+        <button
+          type="button"
+          onClick={handleAction}
+          data-testid="toast-action"
+          style={{
+            background: 'var(--surface-active)',
+            border: 'none',
+            borderRadius: 'var(--radius-sm)',
+            color: 'var(--accent)',
+            fontSize: 12,
+            fontWeight: 500,
+            padding: '5px 10px',
+            cursor: 'pointer',
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {toast.action.label}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => dismiss(toast.id)}
         aria-label="dismiss notification"
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--text-tertiary)',
-          fontSize: 14,
-          cursor: 'pointer',
-          padding: 2,
-          flexShrink: 0,
-        }}
+        style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 14, cursor: 'pointer', padding: 2, flexShrink: 0 }}
       >
         ×
       </button>
@@ -108,7 +120,7 @@ export function Toast() {
         position: 'fixed',
         bottom: 24,
         right: 24,
-        zIndex: 500,
+        zIndex: 'var(--z-toast)' as any,
         display: 'flex',
         flexDirection: 'column-reverse',
         gap: 8,

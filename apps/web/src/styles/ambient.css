@@ -6,10 +6,14 @@
   min-width: 500px;
   min-height: 500px;
   border-radius: 50%;
-  /* Less blur radius + saturate boost = more defined, richer color
-     rather than a soft diffuse wash */
   filter: blur(95px) saturate(180%);
-  opacity: 0.6;
+  opacity: 0.55;
+  /* screen blend lets overlapping blobs actually mix into new hues
+     (violet + cyan -> a cooler blue-white where they cross) instead of
+     just stacking as flat translucent circles — this is most of the
+     "lil more cooler" ask, delivered by how the existing three blobs
+     interact rather than by adding a fourth. */
+  mix-blend-mode: screen;
   will-change: transform;
   transition: background 800ms var(--ease-focus);
 }
@@ -36,7 +40,7 @@
   height: 40vw;
   min-width: 350px;
   min-height: 350px;
-  opacity: 0.45;
+  opacity: 0.4;
   animation: drift-3 18s var(--ease-drift) infinite alternate;
 }
 

@@ -1,5 +1,6 @@
 // apps/web/src/stores/sessionStore.ts
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { insertSessionRemote } from '@/lib/db/queries'
 import type { SessionEndState } from '@/types/session'
 
@@ -24,12 +25,8 @@ interface SessionStoreState {
   clearSummary: () => void
 }
 
-// Supabase's FK error code — can fire if a task was just created locally
-// and its background upsertTaskRemote() (fire-and-forget in
-// taskStore.addTask) hasn't landed yet by the time a session references
-// it. Short retry resolves this timing race without failing the write.
 const FK_VIOLATION = '23503'
-const RETRY_DELAYS_MS = [400, 900, 1600] // ~3s total worst case
+const RETRY_DELAYS_MS = [400, 900, 1600]
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -51,56 +48,73 @@ async function insertSessionWithRetry(
   }
 }
 
-export const useSessionStore = create<SessionStoreState>((set, get) => ({
-  active: null,
-  lastSummary: null,
+// SSR-safe storage: `persist` reads storage as soon as the module loads,
+// which for a 'use client' page can still happen during a server render
+// pass. Referencing window.localStorage unguarded there throws. This
+// no-op fallback makes rehydration a harmless zero-op on the server and
+// the real thing once `window` exists in the browser.
+const noopStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+}
 
-  startSession: (taskId, baseDurationSeconds) => {
-    set({
-      active: {
-        taskId,
-        startedAt: new Date().toISOString(),
-        baseDurationSeconds,
-        hyperfocus: false,
+export const useSessionStore = create<SessionStoreState>()(
+  persist(
+    (set, get) => ({
+      active: null,
+      lastSummary: null,
+
+      startSession: (taskId, baseDurationSeconds) => {
+        set({
+          active: {
+            taskId,
+            startedAt: new Date().toISOString(),
+            baseDurationSeconds,
+            hyperfocus: false,
+          },
+        })
       },
-    })
-  },
 
-  setHyperfocus: (on) => {
-    const active = get().active
-    if (!active) return
-    set({ active: { ...active, hyperfocus: on } })
-  },
+      setHyperfocus: (on) => {
+        const active = get().active
+        if (!active) return
+        set({ active: { ...active, hyperfocus: on } })
+      },
 
-  endSession: async (userId, elapsedSeconds, flowDetected, stateAtEnd) => {
-    const active = get().active
-    if (!active) return
+      endSession: async (userId, elapsedSeconds, flowDetected, stateAtEnd) => {
+        const active = get().active
+        if (!active) return
 
-    const endedAt = new Date().toISOString()
+        const endedAt = new Date().toISOString()
 
-    try {
-      await insertSessionWithRetry({
-        userId,
-        taskId: active.taskId,
-        startedAt: active.startedAt,
-        endedAt,
-        durationSeconds: elapsedSeconds,
-        baseDurationSeconds: active.baseDurationSeconds,
-        exceededBase: elapsedSeconds > active.baseDurationSeconds,
-        flowDetected,
-        hyperfocus: active.hyperfocus,
-        stateAtEnd,
-      })
-    } finally {
-      // Always clear active + set summary, even if the remote write
-      // ultimately failed after retries — a lost analytics row should
-      // never trap the user on /now unable to end their session.
-      set({
-        active: null,
-        lastSummary: { durationSeconds: elapsedSeconds, taskId: active.taskId },
-      })
+        try {
+          await insertSessionWithRetry({
+            userId,
+            taskId: active.taskId,
+            startedAt: active.startedAt,
+            endedAt,
+            durationSeconds: elapsedSeconds,
+            baseDurationSeconds: active.baseDurationSeconds,
+            exceededBase: elapsedSeconds > active.baseDurationSeconds,
+            flowDetected,
+            hyperfocus: active.hyperfocus,
+            stateAtEnd,
+          })
+        } finally {
+          set({
+            active: null,
+            lastSummary: { durationSeconds: elapsedSeconds, taskId: active.taskId },
+          })
+        }
+      },
+
+      clearSummary: () => set({ lastSummary: null }),
+    }),
+    {
+      name: 'drift-active-session',
+      storage: createJSONStorage(() => (typeof window !== 'undefined' ? window.localStorage : noopStorage)),
+      partialize: (state) => ({ active: state.active }),
     }
-  },
-
-  clearSummary: () => set({ lastSummary: null }),
-}))
+  )
+)

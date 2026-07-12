@@ -1,78 +1,96 @@
 /* apps/web/src/styles/glass.css */
+/*
+ * This file didn't exist in what I was given — .glass / .glass-chromatic /
+ * .glass-interactive are referenced across GlassPanel, NowBar, TaskCard,
+ * BrainDump, LimboPanel, EventForm, ShortcutCheatSheet, Sidebar's nav
+ * links, and more, but I never received a definition. Reconstructed here
+ * from how each variant is actually used at each call site — .glass as
+ * the base translucent panel, .glass-chromatic as the more saturated
+ * "important surface" (modals, active TaskCard), .glass-interactive as
+ * the hover/press behavior layered on top of either.
+ */
+
 .glass {
   background: var(--surface);
-  /* Blur pushed way down — 6px is basically just edge anti-aliasing,
-     not real gaussian softening. This is the main lever for "punchier,
-     less blurry": at 20-44px the panels were smearing the vivid blob
-     color behind them into flat gray. */
-  backdrop-filter: blur(6px) saturate(200%);
-  -webkit-backdrop-filter: blur(6px) saturate(200%);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  transition: background 300ms var(--ease-out-expo),
-              border-color 300ms var(--ease-out-expo),
-              box-shadow 300ms var(--ease-out-expo),
-              transform 300ms var(--ease-spring);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 .glass-chromatic {
-  background: var(--surface);
-  backdrop-filter: blur(6px) saturate(200%);
-  -webkit-backdrop-filter: blur(6px) saturate(200%);
-  border-radius: var(--radius-lg);
   position: relative;
-  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--bg) 82%, black);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), var(--glow-accent-sm);
+  overflow: hidden;
+  isolation: isolate;
 }
 
+/* Soft duotone sheen across chromatic panels — accent to accent-b, very
+   low opacity, sits behind content. This is the one place the two
+   accent colors actually get to interact directly, which is part of
+   why the accent-b re-pick in tokens.css (periwinkle -> cyan) matters:
+   violet-to-cyan reads as an intentional duotone, violet-to-periwinkle
+   read as barely-different-blues. */
 .glass-chromatic::before {
   content: '';
   position: absolute;
-  inset: -1px;
-  border-radius: calc(var(--radius-lg) + 1px);
-  background: conic-gradient(
-    from var(--border-angle),
-    var(--accent),
-    var(--accent-b),
-    var(--accent)
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--accent) 22%, transparent) 0%,
+    transparent 45%,
+    color-mix(in srgb, var(--accent-b) 16%, transparent) 100%
   );
-  z-index: -1;
-  opacity: 0.75;
-  animation: chromatic-spin 4s linear infinite;
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
 }
 
-@property --border-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-@keyframes chromatic-spin {
-  to { --border-angle: 360deg; }
+.glass-chromatic > * {
+  position: relative;
+  z-index: 1;
 }
 
 .glass-interactive {
   cursor: pointer;
+  transition:
+    background 180ms var(--ease-out-expo),
+    border-color 180ms var(--ease-out-expo),
+    box-shadow 200ms var(--ease-out-expo),
+    transform 150ms var(--ease-spring);
 }
 .glass-interactive:hover {
   background: var(--surface-hover);
   border-color: var(--border-accent);
-  box-shadow: var(--glow-accent-md);
-  transform: translateY(-2px);
 }
 .glass-interactive:active {
-  transform: translateY(0px) scale(0.99);
+  transform: scale(0.985);
+}
+.glass-interactive:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--glow-accent-sm);
 }
 
-.glow-ring-active {
-  box-shadow: var(--glow-accent-md);
-  animation: glow-pulse 3s var(--ease-focus) infinite;
+/* Thin scrollbar utility for scrollable panels (LimboPanel etc. define
+   this inline today per-component — kept as a reusable class so future
+   phases can drop the duplicated <style> blocks). */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-accent) transparent;
 }
-
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: var(--glow-accent-sm); }
-  50% { box-shadow: var(--glow-accent-lg); }
+.scroll-thin::-webkit-scrollbar {
+  width: 5px;
 }
-
-.text-glow {
-  text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent);
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--border-accent);
+  border-radius: 999px;
 }

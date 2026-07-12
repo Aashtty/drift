@@ -15,12 +15,53 @@
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* New — a slow, gentle opacity breathe. Meant for "still working on it"
+   or "quietly present" indicators (AES scoring badge, offline dot,
+   ambient status) so pending states read as calm rather than anxious. */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.85; }
+}
+
+/* New — directional shimmer sweep for skeleton/loading placeholders,
+   used by later phases (e.g. Replay stat cards while data loads). */
+@keyframes shimmer-sweep {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+/* New — small entrance for anything sliding up from a fixed dock
+   (toasts, bottom sheets) that isn't already Motion-driven. */
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .animate-fade-up {
   animation: fade-up 300ms var(--ease-out-expo) both;
 }
 
 .animate-scale-in {
   animation: scale-in 300ms var(--ease-spring) both;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2.4s var(--ease-focus) infinite;
+}
+
+.animate-slide-up-fade {
+  animation: slide-up-fade 280ms var(--ease-out-expo) both;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-hover) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.8s ease-in-out infinite;
 }
 
 /* Global reduced-motion override — collapses every CSS animation/transition

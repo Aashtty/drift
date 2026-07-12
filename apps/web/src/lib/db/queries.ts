@@ -13,11 +13,6 @@ export async function fetchTasksRemote(userId: string): Promise<Task[]> {
 }
 
 export async function upsertTaskRemote(task: Task): Promise<void> {
-  // Callers pass LocalTask (Task + _dirty/_deleted bookkeeping fields used
-  // only by the Dexie/local-sync layer). Those fields don't exist as
-  // columns in the real `tasks` table — sending them causes PostgREST to
-  // reject the whole upsert with PGRST204. Strip anything that isn't a
-  // real column before it goes over the wire.
   const { _dirty, _deleted, ...cleanTask } = task as Task & { _dirty?: boolean; _deleted?: boolean }
   const { error } = await supabase.from('tasks').upsert(cleanTask)
   if (error) throw error
@@ -35,11 +30,17 @@ export async function fetchAnchorsRemote(userId: string): Promise<Anchor[]> {
 }
 
 export async function upsertAnchorRemote(anchor: Anchor): Promise<void> {
-  // Same class of bug as tasks above — LocalAnchor carries a local-only
-  // `_dirty` field that isn't a real column on `anchors`. Stripped here
-  // defensively even though it hasn't been confirmed to have failed yet.
   const { _dirty, ...cleanAnchor } = anchor as Anchor & { _dirty?: boolean }
   const { error } = await supabase.from('anchors').upsert(cleanAnchor)
+  if (error) throw error
+}
+
+/**
+ * New — anchors had a create path (`addAnchor`) but no way to remove
+ * one, anywhere in the app. Needed for the new Anchor Manager UI.
+ */
+export async function deleteAnchorRemote(id: string): Promise<void> {
+  const { error } = await supabase.from('anchors').delete().eq('id', id)
   if (error) throw error
 }
 

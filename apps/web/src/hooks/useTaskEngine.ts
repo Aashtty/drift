@@ -12,6 +12,10 @@ export function useTaskEngine(userId: string) {
   const addTask = useTaskStore((s) => s.addTask)
   const updateTask = useTaskStore((s) => s.updateTask)
   const setStatus = useTaskStore((s) => s.setStatus)
+  // New — the store already had this, but nothing consuming useTaskEngine
+  // (i.e. every task-facing page) could reach it. Backs task deletion in
+  // the new Task Detail Sheet.
+  const removeTask = useTaskStore((s) => s.removeTask)
 
   const anchors = useAnchorStore((s) => s.anchors)
   const loadAnchorsLocal = useAnchorStore((s) => s.loadFromLocal)
@@ -33,14 +37,10 @@ export function useTaskEngine(userId: string) {
     return tasks.filter((t) => t.status === status)
   }
 
-  /** The one real place a task becomes 'done' — sets status AND completed_at,
-   *  which momentum scoring (useMomentum) and the shutdown ritual both key off. */
   async function markComplete(task: Task) {
     await updateTask(task.id, { status: 'done', completed_at: new Date().toISOString() })
   }
 
-  /** Used by the Shutdown Ritual's "add more" input — creates a brand-new
-   *  task that's ALREADY done, for something you finished but never logged. */
   async function addCompletedTask(userId: string, name: string): Promise<Task> {
     const task: Task = {
       id: crypto.randomUUID(),
@@ -59,5 +59,17 @@ export function useTaskEngine(userId: string) {
     return task
   }
 
-  return { tasks, anchors, loaded, addTask, updateTask, setStatus, anchorFor, tasksByStatus, markComplete, addCompletedTask }
+  return {
+    tasks,
+    anchors,
+    loaded,
+    addTask,
+    updateTask,
+    setStatus,
+    removeTask,
+    anchorFor,
+    tasksByStatus,
+    markComplete,
+    addCompletedTask,
+  }
 }

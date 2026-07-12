@@ -1,8 +1,20 @@
-/* apps/web/src/styles/tokens.css — IDLE defaults section only, rest identical to last version */
+/* apps/web/src/styles/tokens.css */
 :root {
-  --bg: #0d0d22;
-  --accent: #9977ff;
-  --accent-b: #7799ff;
+  /* Base surface — same deep-indigo family, pulled slightly cooler/darker
+     than before (was #0d0d22) so the violet glow reads richer against it. */
+  --bg: #0a0a1f;
+  --bg-elevated: #111229;
+
+  /* Accent shifted a touch cooler/bluer than the previous #9977ff, and
+     accent-b moved off periwinkle onto a proper cyan — this also better
+     matches FLOW state's accentB (#00e5cc) from stateColors, so the IDLE
+     baseline and the FLOW state now feel like the same family instead of
+     two different color systems. */
+  --accent: #8f6bff;
+  --accent-b: #4fd8ff;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-gradient: linear-gradient(135deg, var(--accent), var(--accent-b));
+
   --text-primary: #e4e2ff;
   --text-secondary: rgba(228, 226, 255, 0.58);
   --text-tertiary: rgba(228, 226, 255, 0.3);
@@ -11,16 +23,21 @@
   --surface-hover: rgba(255, 255, 255, 0.095);
   --surface-active: rgba(255, 255, 255, 0.135);
   --border: rgba(255, 255, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.06);
   --border-accent: rgba(255, 255, 255, 0.2);
 
   --success: #00e5a0;
   --danger: #ff3366;
   --warning: #ffaa00;
+  --info: var(--accent-b);
   --muted: rgba(255, 255, 255, 0.2);
 
-  --ambient-1: #9977ff;
-  --ambient-2: #5599ff;
-  --ambient-3: #dd66ff;
+  /* Ambient blobs — same violet/blue/magenta family, nudged a step
+     cooler (less pink, more blue-violet) per "keep it similar, just
+     cooler." */
+  --ambient-1: #8f6bff;
+  --ambient-2: #3fa0ff;
+  --ambient-3: #c060ff;
 
   --glow-accent-sm: 0 0 14px -2px color-mix(in srgb, var(--accent) 65%, transparent);
   --glow-accent-md: 0 0 36px -5px color-mix(in srgb, var(--accent) 65%, transparent),
@@ -29,6 +46,8 @@
                     0 0 26px -4px color-mix(in srgb, var(--accent) 50%, transparent);
   --glow-success: 0 0 24px -4px color-mix(in srgb, var(--success) 60%, transparent);
   --glow-danger: 0 0 24px -4px color-mix(in srgb, var(--danger) 60%, transparent);
+  --glow-warning: 0 0 24px -4px color-mix(in srgb, var(--warning) 60%, transparent);
+  --glow-info: 0 0 24px -4px color-mix(in srgb, var(--info) 60%, transparent);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -43,12 +62,33 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
+  --radius-2xl: 28px;
   --radius-full: 9999px;
 
   --ease-focus: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-drift: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.4, 0.32, 1.4);
+
+  /* New — formalizes the z-index values that were previously scattered
+     as raw numbers across components (10, 20, 50, 90, 100, 120, 150,
+     200, 300, 500). Not retrofitted onto existing files yet in this
+     pass — later phases adopt these as each file gets touched — but
+     defined now so every new/rewritten component in this overhaul
+     shares one stacking vocabulary instead of guessing a number. */
+  --z-ambient: 0;
+  --z-content: 1;
+  --z-arc: 10;
+  --z-nav: 20;
+  --z-floating: 50;
+  --z-panel: 90;
+  --z-modal: 100;
+  --z-popover: 120;
+  --z-sheet: 150;
+  --z-fullscreen: 200;
+  --z-onboarding: 300;
+  --z-toast: 500;
 
   color-scheme: dark;
 }
@@ -56,5 +96,32 @@
 body {
   background: var(--bg);
   color: var(--text-primary);
-  transition: background-color 800ms var(--ease-focus);
+  transition: background-color 800ms var(--ease-focus), color 500ms var(--ease-focus);
+}
+
+/* Cool-toned selection + scrollbar instead of the browser default blue —
+   small detail, but a stray default-blue text selection breaks the whole
+   violet/cyan mood instantly. */
+::selection {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--text-primary);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-accent) transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-accent);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
 }

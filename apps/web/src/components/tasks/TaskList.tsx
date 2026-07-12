@@ -13,29 +13,40 @@ interface TaskListProps {
   tasks: Task[]
   anchorFor: (task: Task) => Anchor | null
   defaultEnergy?: EnergyLevel
+  /** Caps how many rows render, with a "+N more" footer — used by the
+   *  Dashboard's curated view. Omit for the full list (Tasks page). */
+  limit?: number
+  onLimitReachedLabel?: string
+  onViewAll?: () => void
   onTaskStart?: (task: Task) => void
   onTaskComplete?: (task: Task) => void
-  onTaskSendToLimbo?: (task: Task) => void
-  /** Fires whenever the user manually changes the energy level, so a
-   *  parent can persist it (e.g. to settingsStore's energy_default). */
+  onOpenDetail?: (task: Task) => void
   onEnergyChange?: (level: EnergyLevel) => void
+  /** Overrides the default AES-ascending order after energy filtering —
+   *  used by the Tasks page's sort control (alphabetical / recent /
+   *  anchor). Dashboard omits this and keeps the default AES order. */
+  sortComparator?: (a: Task, b: Task) => number
+  selectionMode?: boolean
+  selectedIds?: Set<string>
+  onToggleSelect?: (task: Task) => void
 }
 
 export function TaskList({
   tasks,
   anchorFor,
   defaultEnergy = 'high',
+  limit,
+  onViewAll,
   onTaskStart,
   onTaskComplete,
-  onTaskSendToLimbo,
+  onOpenDetail,
   onEnergyChange,
+  sortComparator,
+  selectionMode = false,
+  selectedIds,
+  onToggleSelect,
 }: TaskListProps) {
   const [energy, setEnergy] = useState<EnergyLevel>(defaultEnergy)
-  // `defaultEnergy` commonly arrives late — settings load async after
-  // mount — so the initial useState value is often stale by the time the
-  // real saved preference shows up. Sync to it as it changes, but only
-  // until the person makes their own choice in this session; after that,
-  // their in-session pick should win over a late-arriving default.
   const userChangedRef = useRef(false)
 
   useEffect(() => {
@@ -48,14 +59,21 @@ export function TaskList({
     onEnergyChange?.(level)
   }
 
-  const visible = filterByEnergy(tasks, energy)
+  let visible = filterByEnergy(tasks, energy)
+  if (sortComparator) visible = [...visible].sort(sortComparator)
+
+  const overflow = limit != null ? Math.max(0, visible.length - limit) : 0
+  const shown = limit != null ? visible.slice(0, limit) : visible
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 480 }}>
-      <EnergySelector value={energy} onChange={handleEnergyChange} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <EnergySelector value={energy} onChange={handleEnergyChange} />
+        <span className="text-micro-mono" style={{ opacity: 0.5 }}>{visible.length}</span>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-testid="task-list">
         <AnimatePresence mode="popLayout">
-          {visible.length === 0 && (
+          {shown.length === 0 && (
             <motion.p
               key="empty"
               initial={{ opacity: 0 }}
@@ -67,7 +85,7 @@ export function TaskList({
               Nothing matches this energy level right now — try another one, or add a task.
             </motion.p>
           )}
-          {visible.map((t) => (
+          {shown.map((t) => (
             <motion.div
               key={t.id}
               layout
@@ -81,12 +99,25 @@ export function TaskList({
                 anchor={anchorFor(t)}
                 onClick={() => onTaskStart?.(t)}
                 onToggleComplete={onTaskComplete}
-                onSendToLimbo={onTaskSendToLimbo}
+                onOpenDetail={onOpenDetail}
+                selectionMode={selectionMode}
+                selected={selectedIds?.has(t.id) ?? false}
+                onToggleSelect={onToggleSelect}
               />
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
+      {overflow > 0 && onViewAll && (
+        <button
+          type="button"
+          onClick={onViewAll}
+          data-testid="task-list-view-all"
+          style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 12.5, cursor: 'pointer', alignSelf: 'flex-start', padding: 0 }}
+        >
+          +{overflow} more → see all tasks
+        </button>
+      )}
     </div>
   )
 }
