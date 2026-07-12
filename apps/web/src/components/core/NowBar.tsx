@@ -17,21 +17,26 @@ interface NowBarProps {
   phase: TimerPhase
   justPulsed: boolean
   appState: AppState
+  /** True while a save is in flight for Done/End — disables both buttons
+   *  so a slow connection can't produce a double-submit. */
+  ending?: boolean
   onDone: () => void
-  onPause: () => void
+  /**
+   * Ends the session without marking the task complete. Previously
+   * called `onPause`, but nothing about it was actually pausable —
+   * it called the same `endSession` as onBackToDashboard. Renamed the
+   * prop (and the button copy) to match what it really does, rather
+   * than implying resumability that doesn't exist.
+   */
+  onEnd: () => void
   onLockIn: () => void
-  /** Optional — renders a subtle "← dashboard" link, top-left. */
   onBackToDashboard?: () => void
-  /** Optional — makes the task title clickable to rename in place. */
   onRename?: (newName: string) => void
 }
 
 const ENCOURAGEMENT = ['still with it', 'good pace', 'no rush', 'keep going', 'in the zone']
 const CONFIRM_AUTO_REVERT_MS = 6000
 
-// Small inline icon set — replaces emoji (🔒 ✓), which render wildly
-// inconsistently across OS/browser combos and looked out of place next
-// to the rest of the custom UI here.
 function LockIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -40,11 +45,13 @@ function LockIcon() {
     </svg>
   )
 }
-function PauseIcon() {
+function StopIcon() {
+  // Square stop glyph replaces the old pause (two bars) icon — matches
+  // the honest "this ends the session" semantics instead of implying
+  // a resumable pause.
   return (
-    <svg width="12" height="13" viewBox="0 0 14 16" fill="none">
-      <rect x="2" y="1.5" width="3.2" height="13" rx="1" fill="currentColor" />
-      <rect x="8.8" y="1.5" width="3.2" height="13" rx="1" fill="currentColor" />
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <rect x="1.5" y="1.5" width="11" height="11" rx="2" fill="currentColor" />
     </svg>
   )
 }
@@ -64,13 +71,14 @@ export function NowBar({
   phase,
   justPulsed,
   appState,
+  ending = false,
   onDone,
-  onPause,
+  onEnd,
   onLockIn,
   onBackToDashboard,
   onRename,
 }: NowBarProps) {
-  const [confirmExit, setConfirmExit] = useState(false)
+  const [confirmEnd, setConfirmEnd] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [draftName, setDraftName] = useState(taskName)
   const [encouragementIndex, setEncouragementIndex] = useState(0)
@@ -89,25 +97,19 @@ export function NowBar({
     if (isEditingName) nameInputRef.current?.focus()
   }, [isEditingName])
 
-  // Confirm-pause used to stay open indefinitely if the person clicked
-  // "Pause" and then got pulled away before clicking "confirm pause" or
-  // "back" — a very plausible interruption for exactly the people this
-  // app is built for. Auto-revert after a few seconds of no action.
-  function openConfirmExit() {
-    setConfirmExit(true)
+  function openConfirmEnd() {
+    setConfirmEnd(true)
     if (confirmRevertRef.current) clearTimeout(confirmRevertRef.current)
-    confirmRevertRef.current = setTimeout(() => setConfirmExit(false), CONFIRM_AUTO_REVERT_MS)
+    confirmRevertRef.current = setTimeout(() => setConfirmEnd(false), CONFIRM_AUTO_REVERT_MS)
   }
-  function closeConfirmExit() {
-    setConfirmExit(false)
+  function closeConfirmEnd() {
+    setConfirmEnd(false)
     if (confirmRevertRef.current) clearTimeout(confirmRevertRef.current)
   }
   useEffect(() => () => {
     if (confirmRevertRef.current) clearTimeout(confirmRevertRef.current)
   }, [])
 
-  // Quiet rotation through short encouragement phrases while in flow —
-  // not a nag, not a notification, just something to glance at.
   useEffect(() => {
     if (!inFlow) return
     const t = setInterval(() => {
@@ -116,19 +118,10 @@ export function NowBar({
     return () => clearInterval(t)
   }, [inFlow])
 
-  // Keyboard shortcuts:
-  //   L        lock in (available through FOCUS and FLOW)
-  //   D        mark done
-  //   Esc / P  open the pause confirm — pressing Esc again while it's
-  //            already open confirms the pause, so the whole flow is
-  //            keyboard-only if you want it to be.
-  // Bails out while the rename input or the brain dump modal has
-  // focus/is open, so typing "d" while renaming a task doesn't also
-  // fire "mark done".
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (brainDumpOpen || isEditingName) return
+      if (brainDumpOpen || isEditingName || ending) return
       const target = e.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return
 
@@ -138,13 +131,13 @@ export function NowBar({
       } else if (key === 'd') {
         onDone()
       } else if (e.key === 'Escape' || key === 'p') {
-        if (confirmExit) onPause()
-        else openConfirmExit()
+        if (confirmEnd) onEnd()
+        else openConfirmEnd()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [sessionActive, onDone, onLockIn, onPause, brainDumpOpen, isEditingName, confirmExit])
+  }, [sessionActive, onDone, onLockIn, onEnd, brainDumpOpen, isEditingName, confirmEnd, ending])
 
   function commitRename() {
     const trimmed = draftName.trim()
@@ -168,10 +161,6 @@ export function NowBar({
   }
 
   const flowElapsedMinutes = inFlow ? Math.max(0, Math.floor((elapsedSeconds - baseDurationSeconds) / 60)) : 0
-  // Guards against a sidebar unexpectedly coexisting with this screen
-  // (e.g. a focus session started from somewhere that doesn't do a real
-  // route change to /now) — these buttons physically cannot land inside
-  // a ~232px sidebar column regardless of what's rendered behind them.
   const safeLeft = 'max(56px, 260px)'
 
   return (
@@ -184,45 +173,24 @@ export function NowBar({
         flexDirection: 'column',
         justifyContent: 'center',
         paddingLeft: safeLeft,
-        // Soft scrim, not a solid fill — still lets the ambient
-        // background glow through, but gives this screen real visual
-        // separation from anything that might be rendered underneath it
-        // (belt-and-suspenders alongside the z-index bump above; the
-        // real fix for sidebar coexistence lives wherever a session is
-        // actually started outside the dashboard, e.g. /tasks).
         background: 'color-mix(in srgb, var(--bg) 30%, transparent)',
-        // CRITICAL: this wrapper covers the entire viewport for layout
-        // purposes only. Without pointer-events: none it silently eats
-        // clicks meant for anything rendered as a sibling underneath it
-        // in the same fixed-positioning context (e.g. SoundControl,
-        // mounted alongside NowBar in now/page.tsx). Interactive
-        // children below opt back in explicitly with pointerEvents: 'auto'.
         pointerEvents: 'none',
       }}
       data-testid="now-bar"
       data-phase={phase}
     >
-      {/* Top-left wayfinding + quick-capture cluster. Mirrors the
-          TimerRing's top:40/right:56 placement on the opposite corner
-          so the screen reads as intentionally framed, not empty. */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25, duration: 0.5 }}
-        style={{
-          position: 'fixed',
-          top: 40,
-          left: safeLeft,
-          display: 'flex',
-          gap: 8,
-          pointerEvents: 'auto',
-        }}
+        style={{ position: 'fixed', top: 40, left: safeLeft, display: 'flex', gap: 8, pointerEvents: 'auto' }}
       >
         {onBackToDashboard && (
           <button
             type="button"
             data-testid="back-to-dashboard-button"
             onClick={onBackToDashboard}
+            disabled={ending}
             className="glass"
             style={{
               display: 'flex',
@@ -234,8 +202,8 @@ export function NowBar({
               borderRadius: 'var(--radius-full)',
               color: 'var(--text-secondary)',
               fontSize: 12.5,
-              cursor: 'pointer',
-              opacity: 0.8,
+              cursor: ending ? 'default' : 'pointer',
+              opacity: ending ? 0.5 : 0.8,
             }}
           >
             ← dashboard
@@ -392,12 +360,6 @@ export function NowBar({
         />
       </div>
 
-      {/* Single unified control dock — one glass pill, bottom-center.
-          Lock in is now available through FOCUS *and* FLOW (previously
-          it disappeared the instant flow kicked in, which was backwards
-          — flow is exactly when shielding against interruption matters
-          most). Icons are custom SVG instead of emoji for a consistent
-          look across platforms. */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -413,7 +375,8 @@ export function NowBar({
           gap: 4,
           padding: 6,
           borderRadius: 'var(--radius-full)',
-          pointerEvents: 'auto', // opt back in — parent wrapper is pointer-events: none
+          pointerEvents: 'auto',
+          opacity: ending ? 0.6 : 1,
         }}
       >
         {sessionActive && (
@@ -421,6 +384,7 @@ export function NowBar({
             type="button"
             data-testid="lock-in-button"
             onClick={onLockIn}
+            disabled={ending}
             title="Lock in (L)"
             style={{
               display: 'flex',
@@ -433,10 +397,11 @@ export function NowBar({
               background: 'transparent',
               color: inFlow ? 'var(--accent)' : 'var(--text-secondary)',
               fontSize: 13,
-              cursor: 'pointer',
+              cursor: ending ? 'default' : 'pointer',
               transition: 'background 200ms var(--ease-out-expo), color 200ms var(--ease-out-expo)',
             }}
             onMouseEnter={(e) => {
+              if (ending) return
               e.currentTarget.style.background = 'var(--surface-hover)'
               e.currentTarget.style.color = 'var(--text-primary)'
             }}
@@ -452,16 +417,17 @@ export function NowBar({
         <div style={{ width: 1, height: 24, background: 'var(--border)' }} />
 
         <AnimatePresence mode="wait" initial={false}>
-          {!confirmExit ? (
+          {!confirmEnd ? (
             <motion.button
-              key="pause-prompt"
+              key="end-prompt"
               type="button"
               data-testid="pause-button"
-              onClick={openConfirmExit}
+              onClick={openConfirmEnd}
+              disabled={ending}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              title="Pause (Esc or P)"
+              title="End session (Esc or P) — progress is saved, but you can't resume"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -473,9 +439,10 @@ export function NowBar({
                 background: 'transparent',
                 color: 'var(--text-secondary)',
                 fontSize: 13,
-                cursor: 'pointer',
+                cursor: ending ? 'default' : 'pointer',
               }}
               onMouseEnter={(e) => {
+                if (ending) return
                 e.currentTarget.style.background = 'var(--surface-hover)'
                 e.currentTarget.style.color = 'var(--text-primary)'
               }}
@@ -484,7 +451,7 @@ export function NowBar({
                 e.currentTarget.style.color = 'var(--text-secondary)'
               }}
             >
-              <PauseIcon /> Pause
+              <StopIcon /> End session
             </motion.button>
           ) : (
             <motion.div
@@ -497,7 +464,8 @@ export function NowBar({
             >
               <button
                 type="button"
-                onClick={closeConfirmExit}
+                onClick={closeConfirmEnd}
+                disabled={ending}
                 style={{
                   height: 40,
                   padding: '0 14px',
@@ -506,14 +474,15 @@ export function NowBar({
                   background: 'transparent',
                   color: 'var(--text-tertiary)',
                   fontSize: 13,
-                  cursor: 'pointer',
+                  cursor: ending ? 'default' : 'pointer',
                 }}
               >
                 back
               </button>
               <button
                 type="button"
-                onClick={onPause}
+                onClick={onEnd}
+                disabled={ending}
                 title="Esc again to confirm"
                 style={{
                   height: 40,
@@ -523,10 +492,10 @@ export function NowBar({
                   background: 'var(--surface-active)',
                   color: 'var(--text-secondary)',
                   fontSize: 13,
-                  cursor: 'pointer',
+                  cursor: ending ? 'default' : 'pointer',
                 }}
               >
-                confirm pause
+                {ending ? 'ending…' : 'confirm end'}
               </button>
             </motion.div>
           )}
@@ -538,6 +507,7 @@ export function NowBar({
           type="button"
           data-testid="done-button"
           onClick={onDone}
+          disabled={ending}
           title="Mark done (D)"
           style={{
             display: 'flex',
@@ -551,14 +521,14 @@ export function NowBar({
             color: 'var(--success)',
             fontSize: 13,
             fontWeight: 500,
-            cursor: 'pointer',
+            cursor: ending ? 'default' : 'pointer',
             boxShadow: 'var(--glow-success)',
             transition: 'transform 150ms var(--ease-spring)',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)' }}
+          onMouseEnter={(e) => { if (!ending) e.currentTarget.style.transform = 'translateY(-1px)' }}
           onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)' }}
         >
-          <CheckIcon /> Mark done
+          <CheckIcon /> {ending ? 'saving…' : 'Mark done'}
         </button>
       </motion.div>
     </div>

@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { insertEventRemote } from '@/lib/db/queries'
 import { GlassPanel } from '@/components/ui/GlassPanel'
+import { toast } from '@/stores/toastStore'
 
 interface EventFormProps {
   userId: string
@@ -43,10 +44,19 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
     e.preventDefault()
     if (!title.trim() || !when) return
     setLoading(true)
-    await insertEventRemote(userId, title.trim(), new Date(when).toISOString())
-    setLoading(false)
-    onAdded()
-    onClose()
+    try {
+      await insertEventRemote(userId, title.trim(), new Date(when).toISOString())
+      onAdded()
+      onClose()
+    } catch (err: any) {
+      console.error('Failed to add event:', err?.message ?? err)
+      toast.error("Couldn't add that event — try again.")
+    } finally {
+      // Previously missing: a thrown error left `loading` stuck true
+      // forever, so the button read "adding..." indefinitely with no
+      // way to retry short of closing the whole form.
+      setLoading(false)
+    }
   }
 
   return (
@@ -71,9 +81,6 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }}
         />
 
-        {/* Quick-pick chips — most calendar entries during a focus
-            session are "later today" or "tomorrow morning," not a
-            precise datetime someone wants to type/scroll to. */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {QUICK_PICKS.map((qp) => (
             <button
@@ -100,7 +107,7 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
             type="submit"
             disabled={loading}
             data-testid="event-submit"
-            style={{ flex: 1, padding: '10px 0', background: 'var(--surface-active)', border: 'none', borderRadius: 8, color: 'var(--accent)', fontSize: 14, cursor: 'pointer' }}
+            style={{ flex: 1, padding: '10px 0', background: 'var(--surface-active)', border: 'none', borderRadius: 8, color: 'var(--accent)', fontSize: 14, cursor: loading ? 'default' : 'pointer' }}
           >
             {loading ? 'adding...' : 'add event'}
           </button>

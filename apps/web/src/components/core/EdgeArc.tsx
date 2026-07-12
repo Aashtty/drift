@@ -5,10 +5,18 @@ import { useEffect, useState } from 'react'
 import { fuzzyTimeLabel, exactTimeLabel } from '@/lib/utils/fuzzyTime'
 import type { CalendarEvent } from '@/types/calendar'
 
+// Was blue → amber → RED as the day went on, based purely on
+// time-of-day, unrelated to any actual urgency. That fights the app's
+// own stated philosophy elsewhere (elasticTimer counts UP, not down,
+// specifically to avoid deadline pressure — see Onboarding copy). A
+// persistent red bar creeping up the screen every afternoon sends the
+// opposite signal. Swapped the top end for a warmer amber instead of
+// alarm-red; still communicates "later in the day" without reading as
+// a warning.
 function getDayProgressColor(progress: number): string {
   if (progress < 0.33) return 'hsl(210, 70%, 60%)'
   if (progress < 0.66) return 'hsl(38, 90%, 55%)'
-  return 'hsl(0, 80%, 55%)'
+  return 'hsl(28, 85%, 58%)'
 }
 
 function getDayProgress(dayStartHour: number, dayEndHour: number): number {
@@ -76,9 +84,17 @@ export function EdgeArc({
   return (
     <div
       data-testid="edge-arc"
+      role="img"
+      aria-label={`Day progress: ${label}`}
+      tabIndex={0}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
       onMouseMove={(e) => setHoverY(e.clientY)}
+      onFocus={(e) => {
+        setHovering(true)
+        setHoverY(e.currentTarget.getBoundingClientRect().top + 60)
+      }}
+      onBlur={() => setHovering(false)}
       style={{ position: 'fixed', left: 0, top: 0, width: 3, height: '100vh', zIndex: 10, background: 'rgba(255,255,255,0.04)', cursor: 'pointer', paddingRight: 8 }}
     >
       <div
@@ -92,9 +108,6 @@ export function EdgeArc({
         }}
       />
 
-      {/* Was a near-invisible 7x2px sliver at low opacity — barely
-          registered against the ambient background. Now a small glowing
-          dot, centered on the arc line, actually visible at a glance. */}
       {dayTicks.map((t) => (
         <div
           key={t.id}

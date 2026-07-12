@@ -9,14 +9,17 @@ interface ShutdownRitualProps {
   completedTasks: Task[]
   incompleteTasks: Task[]
   onAddCompletedTask: (name: string) => Promise<Task>
+  /** Now expected to be async and to throw on failure — the ritual
+   *  awaits it before showing the closing screen, instead of firing it
+   *  inside a setTimeout after the closing screen already started. */
   onComplete: (result: {
     completedTaskIds: string[]
     carriedTaskIds: string[]
     anchorText: string
-  }) => void
+  }) => Promise<void>
 }
 
-type Step = 1 | 2 | 3 | 'closing'
+type Step = 1 | 2 | 3 | 'saving' | 'closing'
 
 const crossfade = {
   initial: { opacity: 0, y: 8 },
@@ -33,6 +36,7 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
   const [adding, setAdding] = useState(false)
   const [carryOver, setCarryOver] = useState<Task[]>(incompleteTasks)
   const [anchorText, setAnchorText] = useState('')
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const allCompleted = [...completedTasks, ...extraCompleted]
 
@@ -70,15 +74,26 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
     setStep(3)
   }
 
-  function finish() {
-    setStep('closing')
-    setTimeout(() => {
-      onComplete({
+  // The save now happens BEFORE the closing screen, not during it. The
+  // old flow showed "good work, you showed up." for a fixed 3s and only
+  // then wrote to the DB inside that window — closing the laptop or
+  // navigating away during that visual meant the whole reflection was
+  // silently never saved, with no error handling anywhere in the chain.
+  async function finish() {
+    setStep('saving')
+    setSaveError(null)
+    try {
+      await onComplete({
         completedTaskIds: Array.from(checked),
         carriedTaskIds: carryOver.map((t) => t.id),
         anchorText,
       })
-    }, 3000)
+      setStep('closing')
+    } catch (err: any) {
+      console.error('Failed to save shutdown:', err?.message ?? err)
+      setSaveError("Couldn't save today's wrap-up. Check your connection and try again.")
+      setStep(3)
+    }
   }
 
   return (
@@ -162,16 +177,22 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
                 </Reorder.Item>
               ))}
             </Reorder.Group>
-            <button
-              type="button"
-              onClick={goToQ3}
-              style={{
-                marginTop: 24, float: 'right', background: 'none', border: 'none',
-                color: 'var(--accent)', fontSize: 14, cursor: 'pointer',
-              }}
-            >
-              next →
-            </button>
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 14, cursor: 'pointer' }}
+              >
+                ← back
+              </button>
+              <button
+                type="button"
+                onClick={goToQ3}
+                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer' }}
+              >
+                next →
+              </button>
+            </div>
           </motion.div>
         )}
 
@@ -191,18 +212,42 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
               }}
               data-testid="anchor-input"
             />
-            <button
-              type="button"
-              data-testid="shutdown-confirm"
-              onClick={finish}
-              style={{
-                marginTop: 24, float: 'right', background: 'none', border: 'none',
-                color: 'var(--accent)', fontSize: 14, cursor: 'pointer',
-              }}
-            >
-              done →
-            </button>
+            {saveError && (
+              <p style={{ marginTop: 12, fontSize: 12.5, color: 'var(--danger)' }} data-testid="shutdown-save-error">
+                {saveError}
+              </p>
+            )}
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 14, cursor: 'pointer' }}
+              >
+                ← back
+              </button>
+              <button
+                type="button"
+                data-testid="shutdown-confirm"
+                onClick={() => void finish()}
+                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer' }}
+              >
+                done →
+              </button>
+            </div>
           </motion.div>
+        )}
+
+        {step === 'saving' && (
+          <motion.p
+            key="saving"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.7 }}
+            transition={{ duration: 0.3 }}
+            style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display)', fontSize: 18 }}
+            data-testid="shutdown-saving-text"
+          >
+            wrapping up…
+          </motion.p>
         )}
 
         {step === 'closing' && (

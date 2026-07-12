@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import type { CalendarEvent } from '@/types/calendar'
 import { deleteEventRemote } from '@/lib/db/queries'
 import { EventForm } from './EventForm'
+import { toast } from '@/stores/toastStore'
 
 interface UpcomingEventsProps {
   userId: string
@@ -36,17 +37,13 @@ function relativeChip(minutes: number): string {
 
 export function UpcomingEvents({ userId, events, onRefresh }: UpcomingEventsProps) {
   const [showForm, setShowForm] = useState(false)
-  // Forces a re-render every 30s purely so the "in Nm" chip on the next
-  // event stays roughly accurate without needing a fresh data fetch.
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [, tick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000)
     return () => clearInterval(t)
   }, [])
 
-  // Was slicing to 5 without sorting first — if the Google + manual
-  // merge upstream isn't already in start-time order, this could show
-  // 5 events that aren't actually the soonest 5.
   const upcoming = events
     .filter((e) => new Date(e.start).getTime() > Date.now())
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
@@ -54,8 +51,16 @@ export function UpcomingEvents({ userId, events, onRefresh }: UpcomingEventsProp
 
   async function handleDelete(event: CalendarEvent) {
     if (event.source !== 'manual') return
-    await deleteEventRemote(event.id)
-    onRefresh()
+    setDeletingId(event.id)
+    try {
+      await deleteEventRemote(event.id)
+      onRefresh()
+    } catch (err: any) {
+      console.error('Failed to delete event:', err?.message ?? err)
+      toast.error("Couldn't remove that event — try again.")
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -85,12 +90,13 @@ export function UpcomingEvents({ userId, events, onRefresh }: UpcomingEventsProp
             const isNext = i === 0
             const mins = minutesUntil(e.start)
             const imminent = isNext && mins <= 15
+            const isDeleting = deletingId === e.id
             return (
               <motion.div
                 key={e.id}
                 layout
                 initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
+                animate={{ opacity: isDeleting ? 0.5 : 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 whileHover={{ borderColor: 'var(--border-accent)', boxShadow: 'var(--glow-accent-sm)' }}
                 className="glass"
@@ -128,9 +134,10 @@ export function UpcomingEvents({ userId, events, onRefresh }: UpcomingEventsProp
                     <button
                       type="button"
                       onClick={() => handleDelete(e)}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 11.5, cursor: 'pointer' }}
+                      disabled={isDeleting}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 11.5, cursor: isDeleting ? 'default' : 'pointer' }}
                     >
-                      Remove
+                      {isDeleting ? 'removing…' : 'Remove'}
                     </button>
                   )}
                 </div>

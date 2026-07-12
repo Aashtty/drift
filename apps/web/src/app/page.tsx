@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useTaskEngine } from '@/hooks/useTaskEngine'
 import { useTaskDecay } from '@/hooks/useTaskDecay'
 import { TaskList } from '@/components/tasks/TaskList'
+import { QuickAddTask } from '@/components/tasks/QuickAddTask'
 import { UpcomingEvents } from '@/components/events/UpcomingEvents'
 import { useUser } from '@/hooks/useUser'
 import { useCalendarBridge } from '@/hooks/useCalendarBridge'
@@ -38,6 +39,7 @@ export default function DashboardPage() {
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const updateSettings = useSettingsStore((s) => s.updateSettings)
   const setStatus = useTaskStore((s) => s.setStatus)
+  const addTask = useTaskStore((s) => s.addTask)
   useTaskDecay()
 
   useEffect(() => {
@@ -52,11 +54,28 @@ export default function DashboardPage() {
     router.push(`/now?${params.toString()}`)
   }
 
-  // Was defined on TaskCard/TaskList already but never actually wired up
-  // here — the "not right now" limbo icon on task cards had no handler
-  // passed in, so it never rendered.
   function sendToLimbo(task: Task) {
     void setStatus(task.id, 'limbo')
+  }
+
+  // The dashboard is the screen people land on most, but the only way
+  // to add a task from it used to be the full Brain Dump modal (AI
+  // organizing round-trip) or navigating to /tasks. This mirrors the
+  // same one-line QuickAddTask used there for the "I just thought of
+  // something small" case.
+  function quickAdd(name: string) {
+    const now = new Date().toISOString()
+    const task: Task = {
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      name,
+      status: 'active',
+      aes_score: null,
+      anchor_id: null,
+      created_at: now,
+      updated_at: now,
+    } as Task
+    void addTask(task)
   }
 
   return (
@@ -91,10 +110,19 @@ export default function DashboardPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.12, duration: 0.5 }}
           className="text-meta"
-          style={{ marginBottom: 44, fontSize: 13.5 }}
+          style={{ marginBottom: 24, fontSize: 13.5 }}
         >
           {tasks.length > 0 ? `${tasks.length} on the board today` : 'nothing on the board yet — add something to start'}
         </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.15, duration: 0.4 }}
+          style={{ marginBottom: 20 }}
+        >
+          <QuickAddTask onAdd={quickAdd} />
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0 }}

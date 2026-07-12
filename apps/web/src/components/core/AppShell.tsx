@@ -9,40 +9,23 @@ import { CaptureButton } from '@/components/core/CaptureButton'
 import { Sidebar } from '@/components/core/Sidebar'
 import { Onboarding } from '@/components/onboarding/Onboarding'
 import { ShortcutCheatSheet } from '@/components/core/ShortcutCheatSheet'
+import { Toast } from '@/components/core/Toast'
 import { useCheatSheetShortcut } from '@/hooks/useCheatSheetShortcut'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAnchorStore } from '@/stores/anchorStore'
 import { organizeBrainDump } from '@/lib/ai/taskOrganizer'
 import { useUser } from '@/hooks/useUser'
 import { useOnboarding } from '@/hooks/useOnboarding'
+import { toast } from '@/stores/toastStore'
 import type { Task } from '@/types/task'
 
 const NO_SIDEBAR_ROUTES = ['/now', '/shutdown']
 const PUBLIC_ROUTES = ['/login']
 
-// Exact-segment match instead of a raw startsWith — startsWith('/now')
-// would also match a hypothetical future route like '/nowhere', hiding
-// the sidebar somewhere it shouldn't. Not the cause of the sidebar
-// showing up ON /now (that's a route-matching problem in the other
-// direction — see tasks/page.tsx), but worth tightening regardless.
 function matchesRoute(pathname: string, route: string): boolean {
   return pathname === route || pathname.startsWith(`${route}/`)
 }
 
-/**
- * organizeBrainDump() failing (network blip, AI API timeout/rate-limit,
- * whatever) used to mean total silent data loss — BrainDump.tsx clears
- * the textarea the instant submit is clicked, before this async call
- * even resolves, so a failure here had nothing left to fall back to.
- * This produces plain, unscored tasks straight from the raw lines
- * instead, so a capture is never fully lost — just less organized than
- * it would've been. aes_score: null already renders as "scoring…" in
- * TaskCard and stays visible under every energy filter.
- *
- * NOTE: field names are a best-effort match to what's used elsewhere in
- * the codebase (id/user_id/name/status/aes_score/anchor_id/created_at/
- * updated_at). Adjust if your actual Task type differs.
- */
 function makeFallbackTask(name: string, userId: string): Task {
   const now = new Date().toISOString()
   return {
@@ -80,11 +63,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     return anchors.find((a) => a.name.toLowerCase() === name.toLowerCase())?.id ?? null
   }
 
+  // Now gives explicit feedback either way — the capture never used to
+  // confirm it worked, so a person closing the modal had no way to tell
+  // "organized nicely" from "silently fell back to raw lines" from
+  // "actually did nothing."
   async function handleBrainDumpSubmit(rawText: string) {
     if (!user) return
     try {
       const tasks = await organizeBrainDump(rawText, user.id, anchorNameToId)
       for (const task of tasks) void addTask(task)
+      toast.success(tasks.length === 1 ? 'Captured 1 task.' : `Captured ${tasks.length} tasks.`)
     } catch (err: any) {
       console.error('[AppShell] organizeBrainDump failed, falling back to raw capture:', err?.message ?? err)
       const fallbackTasks = rawText
@@ -93,6 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         .filter(Boolean)
         .map((name) => makeFallbackTask(name, user.id))
       for (const task of fallbackTasks) void addTask(task)
+      toast.info(`Saved ${fallbackTasks.length} task${fallbackTasks.length === 1 ? '' : 's'} — couldn't auto-organize this time, so they're unsorted.`)
     }
   }
 
@@ -120,6 +109,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
       {showCapture && <CaptureButton />}
       <ShortcutCheatSheet open={cheatSheet.open} onClose={() => cheatSheet.setOpen(false)} />
+      <Toast />
     </>
   )
 }
