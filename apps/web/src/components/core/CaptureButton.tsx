@@ -12,28 +12,32 @@ export function CaptureButton() {
       type="button"
       data-testid="capture-button"
       onClick={() => setOpen(true)}
-      aria-label="open brain dump"
-      title="Capture a thought (⌘/Ctrl + Shift + D)"
-      whileHover={{ scale: 1.06 }}
+      title="quick capture"
+      aria-label="quick capture"
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={{ scale: 1.08, boxShadow: '0 8px 30px color-mix(in srgb, var(--accent) 55%, transparent)' }}
       whileTap={{ scale: 0.94 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       style={{
         position: 'fixed',
-        bottom: 28,
-        left: 28,
-        zIndex: 40,
+        bottom: 32,
+        right: 32,
+        zIndex: 50,
         width: 52,
         height: 52,
         borderRadius: '50%',
         border: 'none',
-        background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, black))',
-        boxShadow: '0 8px 28px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 0 1px var(--border-accent)',
-        color: 'var(--bg)',
-        fontSize: 22,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, black))',
+        color: 'var(--bg)',
+        fontSize: 26,
+        fontWeight: 300,
+        lineHeight: 1,
         cursor: 'pointer',
-        transition: 'background 800ms var(--ease-focus), box-shadow 800ms var(--ease-focus)',
+        boxShadow: '0 6px 24px color-mix(in srgb, var(--accent) 40%, transparent)',
       }}
     >
       +

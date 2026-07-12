@@ -26,10 +26,17 @@ interface EdgeArcProps {
   dayStartHour?: number
   dayEndHour?: number
   nearEvent?: CalendarEvent | null
+  events?: CalendarEvent[]
 }
 
-export function EdgeArc({ fuzzyTime = false, dayStartHour = 9, dayEndHour = 19, nearEvent = null }: EdgeArcProps) {
-  const [progress, setProgress] = useState(0)
+export function EdgeArc({
+  fuzzyTime = false,
+  dayStartHour = 9,
+  dayEndHour = 19,
+  nearEvent = null,
+  events = [],
+}: EdgeArcProps) {
+  const [progress, setProgress] = useState(() => getDayProgress(dayStartHour, dayEndHour))
   const [hovering, setHovering] = useState(false)
   const [hoverY, setHoverY] = useState(0)
   const [pulseKey, setPulseKey] = useState(0)
@@ -52,6 +59,20 @@ export function EdgeArc({ fuzzyTime = false, dayStartHour = 9, dayEndHour = 19, 
     ? fuzzyTimeLabel(now)
     : exactTimeLabel(now)
 
+  const dayTicks = events
+    .map((e) => {
+      const d = new Date(e.start)
+      const minutes = d.getHours() * 60 + d.getMinutes()
+      const startMinutes = dayStartHour * 60
+      const endMinutes = dayEndHour * 60
+      const total = endMinutes - startMinutes
+      if (total <= 0) return null
+      const pos = (minutes - startMinutes) / total
+      if (pos < 0 || pos > 1) return null
+      return { id: e.id, pos, summary: e.summary }
+    })
+    .filter((t): t is { id: string; pos: number; summary: string } => t !== null)
+
   return (
     <div
       data-testid="edge-arc"
@@ -70,6 +91,31 @@ export function EdgeArc({ fuzzyTime = false, dayStartHour = 9, dayEndHour = 19, 
           animation: nearEvent ? 'edge-arc-event-pulse 1s var(--ease-spring) 3' : 'none',
         }}
       />
+
+      {/* Was a near-invisible 7x2px sliver at low opacity — barely
+          registered against the ambient background. Now a small glowing
+          dot, centered on the arc line, actually visible at a glance. */}
+      {dayTicks.map((t) => (
+        <div
+          key={t.id}
+          data-testid="edge-arc-tick"
+          title={t.summary}
+          style={{
+            position: 'absolute',
+            left: -1.5,
+            top: `${t.pos * 100}%`,
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: 'var(--text-primary)',
+            opacity: 0.9,
+            boxShadow: '0 0 6px 1px rgba(255,255,255,0.55)',
+            transform: 'translateY(-3px)',
+            pointerEvents: 'none',
+          }}
+        />
+      ))}
+
       <style>{`
         @keyframes edge-arc-event-pulse {
           0% { box-shadow: 0 0 0 0 var(--accent); }

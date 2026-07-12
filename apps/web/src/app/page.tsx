@@ -1,6 +1,7 @@
 // apps/web/src/app/page.tsx
 'use client'
 
+import { useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { motion } from 'motion/react'
 import { useRouter } from 'next/navigation'
@@ -10,6 +11,9 @@ import { TaskList } from '@/components/tasks/TaskList'
 import { UpcomingEvents } from '@/components/events/UpcomingEvents'
 import { useUser } from '@/hooks/useUser'
 import { useCalendarBridge } from '@/hooks/useCalendarBridge'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useTaskStore } from '@/stores/taskStore'
+import type { Task } from '@/types/task'
 
 const DevStateSwitcher =
   process.env.NODE_ENV !== 'production'
@@ -30,7 +34,15 @@ export default function DashboardPage() {
   const router = useRouter()
   const { tasks, anchorFor, markComplete } = useTaskEngine(user?.id ?? '')
   const { events, refreshManualEvents } = useCalendarBridge(user?.id ?? null)
+  const settings = useSettingsStore((s) => s.settings)
+  const loadSettings = useSettingsStore((s) => s.loadSettings)
+  const updateSettings = useSettingsStore((s) => s.updateSettings)
+  const setStatus = useTaskStore((s) => s.setStatus)
   useTaskDecay()
+
+  useEffect(() => {
+    if (user) void loadSettings(user.id)
+  }, [user, loadSettings])
 
   if (!user) return null
 
@@ -38,6 +50,13 @@ export default function DashboardPage() {
     const params = new URLSearchParams({ taskId, task: name })
     if (anchorName) params.set('anchor', anchorName)
     router.push(`/now?${params.toString()}`)
+  }
+
+  // Was defined on TaskCard/TaskList already but never actually wired up
+  // here — the "not right now" limbo icon on task cards had no handler
+  // passed in, so it never rendered.
+  function sendToLimbo(task: Task) {
+    void setStatus(task.id, 'limbo')
   }
 
   return (
@@ -101,9 +120,11 @@ export default function DashboardPage() {
           <TaskList
             tasks={tasks}
             anchorFor={anchorFor}
-            defaultEnergy="high"
+            defaultEnergy={settings?.energy_default ?? 'high'}
             onTaskStart={(task) => startTask(task.id, task.name, anchorFor(task)?.name ?? null)}
             onTaskComplete={(task) => void markComplete(task)}
+            onTaskSendToLimbo={sendToLimbo}
+            onEnergyChange={(level) => void updateSettings({ energy_default: level })}
           />
         </motion.div>
 

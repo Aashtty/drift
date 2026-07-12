@@ -19,6 +19,21 @@ function defaultDateTimeLocalValue(minutesFromNow: number): string {
   return local.toISOString().slice(0, 16)
 }
 
+function tomorrowAtLocalValue(hour: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  d.setHours(hour, 0, 0, 0)
+  const offset = d.getTimezoneOffset()
+  const local = new Date(d.getTime() - offset * 60 * 1000)
+  return local.toISOString().slice(0, 16)
+}
+
+const QUICK_PICKS: { label: string; value: () => string }[] = [
+  { label: 'in 1h', value: () => defaultDateTimeLocalValue(60) },
+  { label: 'in 3h', value: () => defaultDateTimeLocalValue(180) },
+  { label: 'tomorrow 9am', value: () => tomorrowAtLocalValue(9) },
+]
+
 export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
   const [title, setTitle] = useState('')
   const [when, setWhen] = useState(() => defaultDateTimeLocalValue(60))
@@ -55,6 +70,31 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
           data-testid="event-time-input"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }}
         />
+
+        {/* Quick-pick chips — most calendar entries during a focus
+            session are "later today" or "tomorrow morning," not a
+            precise datetime someone wants to type/scroll to. */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {QUICK_PICKS.map((qp) => (
+            <button
+              key={qp.label}
+              type="button"
+              onClick={() => setWhen(qp.value())}
+              style={{
+                padding: '5px 10px',
+                borderRadius: 999,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--text-secondary)',
+                fontSize: 11.5,
+                cursor: 'pointer',
+              }}
+            >
+              {qp.label}
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button
             type="submit"

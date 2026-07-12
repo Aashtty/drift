@@ -1,7 +1,7 @@
 // apps/web/src/components/tasks/TaskList.tsx
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { TaskCard } from './TaskCard'
 import { EnergySelector } from './EnergySelector'
@@ -16,15 +16,43 @@ interface TaskListProps {
   onTaskStart?: (task: Task) => void
   onTaskComplete?: (task: Task) => void
   onTaskSendToLimbo?: (task: Task) => void
+  /** Fires whenever the user manually changes the energy level, so a
+   *  parent can persist it (e.g. to settingsStore's energy_default). */
+  onEnergyChange?: (level: EnergyLevel) => void
 }
 
-export function TaskList({ tasks, anchorFor, defaultEnergy = 'high', onTaskStart, onTaskComplete, onTaskSendToLimbo }: TaskListProps) {
+export function TaskList({
+  tasks,
+  anchorFor,
+  defaultEnergy = 'high',
+  onTaskStart,
+  onTaskComplete,
+  onTaskSendToLimbo,
+  onEnergyChange,
+}: TaskListProps) {
   const [energy, setEnergy] = useState<EnergyLevel>(defaultEnergy)
+  // `defaultEnergy` commonly arrives late — settings load async after
+  // mount — so the initial useState value is often stale by the time the
+  // real saved preference shows up. Sync to it as it changes, but only
+  // until the person makes their own choice in this session; after that,
+  // their in-session pick should win over a late-arriving default.
+  const userChangedRef = useRef(false)
+
+  useEffect(() => {
+    if (!userChangedRef.current) setEnergy(defaultEnergy)
+  }, [defaultEnergy])
+
+  function handleEnergyChange(level: EnergyLevel) {
+    userChangedRef.current = true
+    setEnergy(level)
+    onEnergyChange?.(level)
+  }
+
   const visible = filterByEnergy(tasks, energy)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 480 }}>
-      <EnergySelector value={energy} onChange={setEnergy} />
+      <EnergySelector value={energy} onChange={handleEnergyChange} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-testid="task-list">
         <AnimatePresence mode="popLayout">
           {visible.length === 0 && (

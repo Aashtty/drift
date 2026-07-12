@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { motion } from 'motion/react'
 import type { Task } from '@/types/task'
 import type { Anchor } from '@/types/anchor'
+import { decayLevel, opacityForTask } from '@/lib/utils/taskDecay'
 
 interface TaskCardProps {
   task: Task
@@ -19,6 +20,14 @@ export function TaskCard({ task, anchor, active = false, onClick, onToggleComple
   const anchorColor = anchor?.color ?? 'var(--border)'
   const [limboHover, setLimboHover] = useState(false)
 
+  // Task decay was fully implemented in lib/utils/taskDecay.ts (opacity
+  // 1 / 0.6 / 0.3 as a task ages) but never actually applied here — the
+  // core "old tasks quietly fade" mechanic had no visible effect. Wired
+  // up now, plus a small amber dot once a task enters the "fading" band
+  // so people get one quiet signal before it drops into Limbo.
+  const level = task.updated_at ? decayLevel(task.updated_at) : 'fresh'
+  const opacity = task.updated_at ? opacityForTask(task.updated_at) : 1
+
   return (
     <motion.button
       type="button"
@@ -26,7 +35,8 @@ export function TaskCard({ task, anchor, active = false, onClick, onToggleComple
       data-testid="task-card"
       className={`${active ? 'glass-chromatic' : 'glass'} glass-interactive`}
       whileTap={{ scale: 0.99 }}
-      transition={{ duration: 0.12 }}
+      animate={{ opacity }}
+      transition={{ duration: 0.12, opacity: { duration: 0.6 } }}
       style={{
         height: 54,
         width: '100%',
@@ -41,9 +51,13 @@ export function TaskCard({ task, anchor, active = false, onClick, onToggleComple
       }}
     >
       {onToggleComplete && (
+        // Outer span is the actual click/hit target (28x28) — the
+        // previous 16x16 target doubled as both visual box and hitbox,
+        // which is a small, precision-demanding tap target for a
+        // frequently-used control. Inner span stays visually identical.
         <span
           role="checkbox"
-          aria-checked={false}
+          aria-checked={task.status === 'done'}
           aria-label="mark task complete"
           data-testid="task-complete-toggle"
           onClick={(e) => {
@@ -51,14 +65,27 @@ export function TaskCard({ task, anchor, active = false, onClick, onToggleComple
             onToggleComplete(task)
           }}
           style={{
-            width: 16,
-            height: 16,
+            width: 28,
+            height: 28,
+            marginLeft: -6,
             flexShrink: 0,
-            borderRadius: 'var(--radius-sm)',
-            border: '1.5px solid var(--border-accent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             cursor: 'pointer',
           }}
-        />
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: 'var(--radius-sm)',
+              border: '1.5px solid var(--border-accent)',
+              background: task.status === 'done' ? 'var(--accent)' : 'transparent',
+            }}
+          />
+        </span>
       )}
       <span
         style={{
@@ -73,7 +100,22 @@ export function TaskCard({ task, anchor, active = false, onClick, onToggleComple
       >
         {task.name}
       </span>
-      {task.aes_score != null && (
+
+      {level === 'fading' && (
+        <span
+          title="fading — heading to Limbo soon"
+          aria-hidden="true"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            flexShrink: 0,
+            background: 'var(--warning, #e0a83f)',
+          }}
+        />
+      )}
+
+      {task.aes_score != null ? (
         <span
           className="text-micro-mono"
           style={{
@@ -85,7 +127,24 @@ export function TaskCard({ task, anchor, active = false, onClick, onToggleComple
         >
           AES{task.aes_score}
         </span>
+      ) : (
+        // AI scoring (or the local fallback) hasn't resolved yet — give a
+        // visible "still working on it" signal instead of just omitting
+        // the badge silently, which reads as broken rather than pending.
+        <motion.span
+          className="text-micro-mono"
+          animate={{ opacity: [0.3, 0.7, 0.3] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+          style={{
+            padding: '2px 6px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--surface-active)',
+          }}
+        >
+          scoring…
+        </motion.span>
       )}
+
       {onSendToLimbo && (
         <span
           role="button"

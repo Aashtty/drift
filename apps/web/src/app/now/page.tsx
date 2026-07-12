@@ -9,6 +9,7 @@ import { HyperfocusLock } from '@/components/session/HyperfocusLock'
 import { SoundControl } from '@/components/session/SoundControl'
 import { useAppState } from '@/hooks/useAppState'
 import { useSessionStore } from '@/stores/sessionStore'
+import { useTaskStore } from '@/stores/taskStore'
 import { useUser } from '@/hooks/useUser'
 import { useSettingsStore } from '@/stores/settingsStore'
 
@@ -18,10 +19,15 @@ export default function NowPage() {
   const { user } = useUser()
   const settings = useSettingsStore((s) => s.settings)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
+  const updateTask = useTaskStore((s) => s.updateTask)
 
   const taskId = params.get('taskId')
-  const taskName = params.get('task') ?? 'Untitled task'
   const anchorName = params.get('anchor')
+
+  // Local, renamable copy of the task title — the URL param stays the
+  // original value, this is what's actually displayed and can drift
+  // from it once the person renames the task mid-session.
+  const [displayName, setDisplayName] = useState(params.get('task') ?? 'Untitled task')
 
   useEffect(() => {
     if (user) void loadSettings(user.id)
@@ -59,6 +65,11 @@ export default function NowPage() {
     setHyperfocus(true)
   }
 
+  function handleRename(newName: string) {
+    setDisplayName(newName)
+    if (taskId) void updateTask(taskId, { name: newName })
+  }
+
   async function endAndRoute(path: string) {
     if (!user) return
     const stateAtEnd = phase === 'FLOW' ? 'FLOW' : 'FOCUS'
@@ -75,12 +86,12 @@ export default function NowPage() {
   }
 
   if (!user || !settings || !started) return null
-  if (locked) return <HyperfocusLock taskName={taskName} onExit={() => setLocked(false)} />
+  if (locked) return <HyperfocusLock taskName={displayName} onExit={() => setLocked(false)} />
 
   return (
     <>
       <NowBar
-        taskName={taskName}
+        taskName={displayName}
         anchorName={anchorName}
         elapsedSeconds={elapsedSeconds}
         baseDurationSeconds={baseDurationSeconds}
@@ -90,6 +101,8 @@ export default function NowPage() {
         onDone={() => void endAndRoute('/drift-summary')}
         onPause={() => void endAndRoute('/')}
         onLockIn={handleLockIn}
+        onBackToDashboard={() => void endAndRoute('/')}
+        onRename={taskId ? handleRename : undefined}
       />
       <SoundControl />
     </>

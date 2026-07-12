@@ -14,7 +14,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const { user } = useUser()
-  const { nearEvent } = useCalendarBridge(user?.id ?? null)
+  const { nearEvent, events } = useCalendarBridge(user?.id ?? null)
   const settings = useSettingsStore((s) => s.settings)
 
   return (
@@ -27,6 +27,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         dayStartHour={settings ? Number(settings.day_start.split(':')[0]) : 9}
         dayEndHour={settings ? Number(settings.day_end.split(':')[0]) : 19}
         nearEvent={nearEvent}
+        events={events}
       />
       <AppShell>{children}</AppShell>
     </>

@@ -12,7 +12,21 @@ export function DevStateSwitcher() {
   if (process.env.NODE_ENV === 'production') return null
 
   return (
-    <div style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 50, display: 'flex', gap: 8 }}>
+    <div
+      style={{
+        position: 'fixed',
+        // Sits directly above CaptureButton (bottom:32, height:52, so it
+        // spans 32-84px from the bottom) with a real gap, right-aligned
+        // to the same edge instead of both competing for the same
+        // bottom-right 16-46px band. Fixed here means CaptureButton
+        // doesn't need to know this dev-only tool exists at all.
+        bottom: 100,
+        right: 32,
+        zIndex: 50,
+        display: 'flex',
+        gap: 8,
+      }}
+    >
       {STATES.map((s) => (
         <button
           key={s}

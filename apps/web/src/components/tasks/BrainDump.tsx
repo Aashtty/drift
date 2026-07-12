@@ -12,6 +12,8 @@ interface BrainDumpProps {
   onForceOpenHandled?: () => void
 }
 
+const MAX_TEXTAREA_HEIGHT = 320
+
 export function BrainDump({ onSubmit, forceOpen, onForceOpenHandled }: BrainDumpProps) {
   const open = useBrainDumpUI((s) => s.open)
   const setOpen = useBrainDumpUI((s) => s.setOpen)
@@ -39,6 +41,15 @@ export function BrainDump({ onSubmit, forceOpen, onForceOpenHandled }: BrainDump
       handleSubmit()
     }
     if (e.key === 'Escape') setOpen(false)
+  }
+
+  // Auto-grows with the text instead of staying a fixed 5-row box —
+  // a brain dump is meant to catch a full unfiltered stream of thought,
+  // and a cramped scrolling textarea works against that.
+  function handleInput(e: React.FormEvent<HTMLTextAreaElement>) {
+    const el = e.currentTarget
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`
   }
 
   return (
@@ -129,6 +140,7 @@ export function BrainDump({ onSubmit, forceOpen, onForceOpenHandled }: BrainDump
                   ref={textRef}
                   autoFocus
                   onKeyDown={handleKeyDown}
+                  onInput={handleInput}
                   placeholder="what's on your mind... (one thought per line)"
                   rows={5}
                   style={{
@@ -141,6 +153,8 @@ export function BrainDump({ onSubmit, forceOpen, onForceOpenHandled }: BrainDump
                     fontSize: 16,
                     lineHeight: 1.6,
                     fontFamily: 'inherit',
+                    maxHeight: MAX_TEXTAREA_HEIGHT,
+                    overflowY: 'auto',
                   }}
                 />
 
