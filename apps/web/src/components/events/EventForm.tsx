@@ -52,9 +52,6 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
       console.error('Failed to add event:', err?.message ?? err)
       toast.error("Couldn't add that event — try again.")
     } finally {
-      // Previously missing: a thrown error left `loading` stuck true
-      // forever, so the button read "adding..." indefinitely with no
-      // way to retry short of closing the whole form.
       setLoading(false)
     }
   }
@@ -70,7 +67,7 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
           autoFocus
           required
           data-testid="event-title-input"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }}
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 12px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }}
         />
         <input
           type="datetime-local"
@@ -78,7 +75,7 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
           onChange={(e) => setWhen(e.target.value)}
           required
           data-testid="event-time-input"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }}
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 12px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }}
         />
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -87,15 +84,7 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
               key={qp.label}
               type="button"
               onClick={() => setWhen(qp.value())}
-              style={{
-                padding: '5px 10px',
-                borderRadius: 999,
-                border: '1px solid var(--border)',
-                background: 'var(--surface)',
-                color: 'var(--text-secondary)',
-                fontSize: 11.5,
-                cursor: 'pointer',
-              }}
+              style={{ padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', fontSize: 11.5, cursor: 'pointer' }}
             >
               {qp.label}
             </button>
@@ -107,14 +96,14 @@ export function EventForm({ userId, onAdded, onClose }: EventFormProps) {
             type="submit"
             disabled={loading}
             data-testid="event-submit"
-            style={{ flex: 1, padding: '10px 0', background: 'var(--surface-active)', border: 'none', borderRadius: 8, color: 'var(--accent)', fontSize: 14, cursor: loading ? 'default' : 'pointer' }}
+            style={{ flex: 1, padding: '10px 0', background: 'var(--surface-active)', border: 'none', borderRadius: 'var(--radius-md)', color: 'var(--accent)', fontSize: 14, cursor: loading ? 'default' : 'pointer' }}
           >
             {loading ? 'adding...' : 'add event'}
           </button>
           <button
             type="button"
             onClick={onClose}
-            style={{ padding: '10px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}
+            style={{ padding: '10px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}
           >
             cancel
           </button>

@@ -14,6 +14,15 @@ interface UpcomingEventsProps {
   onRefresh: () => void
 }
 
+function CalendarIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="3.5" width="12" height="10.5" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M2 6.5h12M5.5 2v3M10.5 2v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function formatEventTime(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
@@ -65,8 +74,10 @@ export function UpcomingEvents({ userId, events, onRefresh }: UpcomingEventsProp
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <p className="text-section-label" style={{ letterSpacing: '0.06em' }}>UPCOMING</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <p className="text-section-label" style={{ letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <CalendarIcon /> UPCOMING
+        </p>
         <motion.button
           type="button"
           data-testid="add-event-button"
@@ -79,9 +90,9 @@ export function UpcomingEvents({ userId, events, onRefresh }: UpcomingEventsProp
       </div>
 
       {upcoming.length === 0 && (
-        <p className="text-meta" style={{ padding: '8px 0' }}>
-          Nothing on the calendar yet.
-        </p>
+        <div style={{ padding: '18px 0', textAlign: 'center' }}>
+          <p className="text-meta" style={{ opacity: 0.6 }}>Nothing on the calendar yet.</p>
+        </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-testid="upcoming-events-list">
@@ -101,42 +112,22 @@ export function UpcomingEvents({ userId, events, onRefresh }: UpcomingEventsProp
                 whileHover={{ borderColor: 'var(--border-accent)', boxShadow: 'var(--glow-accent-sm)' }}
                 className="glass"
                 style={{
-                  padding: '11px 14px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  border: imminent ? '1px solid var(--accent)' : undefined,
-                  boxShadow: imminent ? 'var(--glow-accent-sm)' : undefined,
+                  padding: '11px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  border: imminent ? '1px solid var(--accent)' : undefined, boxShadow: imminent ? 'var(--glow-accent-sm)' : undefined,
                 }}
               >
-                <div>
-                  <p style={{ fontSize: 13.5, color: 'var(--text-primary)', margin: 0 }}>{e.summary}</p>
-                  <p className="text-meta" style={{ marginTop: 3 }}>
-                    {formatEventTime(e.start)} {e.source === 'google' && '· from Google Calendar'}
-                  </p>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 13.5, color: 'var(--text-primary)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.summary}</p>
+                  <p className="text-meta" style={{ marginTop: 3 }}>{formatEventTime(e.start)} {e.source === 'google' && '· from Google Calendar'}</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   {isNext && (
-                    <span
-                      className="text-micro-mono"
-                      style={{
-                        padding: '3px 8px',
-                        borderRadius: 'var(--radius-sm)',
-                        background: imminent ? 'var(--accent)' : 'var(--surface-active)',
-                        color: imminent ? 'var(--bg)' : 'var(--text-secondary)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
+                    <span className="text-micro-mono" style={{ padding: '3px 8px', borderRadius: 'var(--radius-sm)', background: imminent ? 'var(--accent)' : 'var(--surface-active)', color: imminent ? 'var(--bg)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                       {relativeChip(mins)}
                     </span>
                   )}
                   {e.source === 'manual' && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(e)}
-                      disabled={isDeleting}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 11.5, cursor: isDeleting ? 'default' : 'pointer' }}
-                    >
+                    <button type="button" onClick={() => handleDelete(e)} disabled={isDeleting} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 11.5, cursor: isDeleting ? 'default' : 'pointer' }}>
                       {isDeleting ? 'removing…' : 'Remove'}
                     </button>
                   )}
@@ -153,7 +144,7 @@ export function UpcomingEvents({ userId, events, onRefresh }: UpcomingEventsProp
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ position: 'fixed', inset: 0, zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-modal)' as any, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}
             onClick={() => setShowForm(false)}
           >
             <div onClick={(e) => e.stopPropagation()}>

@@ -15,10 +15,6 @@ function PlusIcon() {
 interface QuickAddTaskProps {
   onAdd: (name: string, anchorId: string | null) => void
   placeholder?: string
-  /** When provided, typing "#AnchorName" anywhere in the text tags the
-   *  new task to that anchor (case-insensitive, matched against these)
-   *  and strips the token from the saved name. Omit to disable — keeps
-   *  the dashboard's quick add plain and predictable. */
   anchors?: Anchor[]
 }
 
@@ -45,23 +41,17 @@ export function QuickAddTask({ onAdd, placeholder = 'quick add a task...', ancho
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 480 }}>
+    // Was `maxWidth: 480` — same fix as TaskList, for the same reason:
+    // the quick-add bar was narrower than its own container regardless
+    // of available width.
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={anchors.length > 0 ? `${placeholder} (try #${anchors[0].name})` : placeholder}
           data-testid="quick-add-input"
-          style={{
-            flex: 1,
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-full)',
-            padding: '9px 16px',
-            color: 'var(--text-primary)',
-            fontSize: 13.5,
-            outline: 'none',
-          }}
+          style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', padding: '9px 16px', color: 'var(--text-primary)', fontSize: 13.5, outline: 'none' }}
         />
         <button
           type="submit"
@@ -69,27 +59,16 @@ export function QuickAddTask({ onAdd, placeholder = 'quick add a task...', ancho
           data-testid="quick-add-submit"
           disabled={!value.trim()}
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            border: 'none',
-            background: 'var(--surface-active)',
-            color: value.trim() ? 'var(--accent)' : 'var(--text-tertiary)',
-            cursor: value.trim() ? 'pointer' : 'default',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            transition: 'color 150ms var(--ease-drift)',
+            width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'var(--surface-active)',
+            color: value.trim() ? 'var(--accent)' : 'var(--text-tertiary)', cursor: value.trim() ? 'pointer' : 'default',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'color 150ms var(--ease-drift)',
           }}
         >
           <PlusIcon />
         </button>
       </div>
       {matchedAnchor && (
-        <span className="text-micro-mono" style={{ paddingLeft: 16, color: matchedAnchor.color }}>
-          → tagged to {matchedAnchor.name}
-        </span>
+        <span className="text-micro-mono" style={{ paddingLeft: 16, color: matchedAnchor.color }}>→ tagged to {matchedAnchor.name}</span>
       )}
     </form>
   )

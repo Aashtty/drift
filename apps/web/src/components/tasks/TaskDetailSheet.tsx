@@ -34,12 +34,79 @@ function relativeTime(iso: string): string {
   return `${days}d ago`
 }
 
+function PlayIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 16" fill="none">
+      <path d="M2.5 1.8v12.4a1 1 0 0 0 1.5.87l10.5-6.2a1 1 0 0 0 0-1.74L4 .93a1 1 0 0 0-1.5.87Z" fill="currentColor" />
+    </svg>
+  )
+}
+function CheckIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function ClockIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M8 5.5V8.5L10 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 1.5h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+function ArchiveIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="3" width="12" height="3" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M3 6.5V12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M6.5 9h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+function RestoreIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M3 8a5 5 0 1 1 1.6 3.7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M3 11.5V8h3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+interface ActionDescriptor {
+  label: string
+  icon: React.ReactNode
+  tone: 'accent' | 'success' | 'neutral'
+  onClick: () => void
+  testId?: string
+}
+
+function ActionTile({ label, icon, tone, onClick, testId }: ActionDescriptor) {
+  const color = tone === 'accent' ? 'var(--accent)' : tone === 'success' ? 'var(--success)' : 'var(--text-secondary)'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      className="glass glass-interactive"
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '14px 8px', border: 'none', color, fontSize: 11.5, cursor: 'pointer' }}
+    >
+      {icon}
+      <span style={{ textAlign: 'center' }}>{label}</span>
+    </button>
+  )
+}
+
 /**
- * There was previously no way to edit anything about a task besides its
- * name (via the /now screen only, mid-session) or its status (via the
- * TaskCard row icons). Anchor assignment, a manual energy override, and
- * deletion had zero UI anywhere. This panel is that missing surface —
- * one place per task for everything about it.
+ * Rebuilt to fix the dead space in the middle of the panel: the old
+ * version used `marginTop: auto` to force its actions to the very
+ * bottom of a full-height sheet, which on a task with just a couple of
+ * fields set left a large, visually broken empty gap. Actions now
+ * follow the content directly as a compact 2-column icon grid, and a
+ * soft ambient glow (tinted to the task's anchor color, if any) fills
+ * whatever space is genuinely left over instead of a flat void.
  */
 export function TaskDetailSheet({
   task,
@@ -69,6 +136,25 @@ export function TaskDetailSheet({
     if (trimmed && trimmed !== task.name) onRename(task.id, trimmed)
   }
 
+  const anchor = task ? anchors.find((a) => a.id === task.anchor_id) ?? null : null
+
+  const actions: ActionDescriptor[] = !task
+    ? []
+    : task.status === 'active'
+    ? [
+        { label: 'start task', icon: <PlayIcon />, tone: 'accent', onClick: () => onStart(task), testId: 'detail-start' },
+        { label: 'mark done', icon: <CheckIcon />, tone: 'success', onClick: () => onMarkDone(task), testId: 'detail-done' },
+        { label: 'send to limbo', icon: <ClockIcon />, tone: 'neutral', onClick: () => onSendToLimbo(task), testId: 'detail-limbo' },
+      ]
+    : task.status === 'limbo'
+    ? [
+        { label: 'restore to active', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-restore' },
+        { label: 'archive', icon: <ArchiveIcon />, tone: 'neutral', onClick: () => onArchive(task), testId: 'detail-archive' },
+      ]
+    : task.status === 'done'
+    ? [{ label: 'reopen task', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-reopen' }]
+    : [{ label: 'restore to active', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-restore' }]
+
   return (
     <AnimatePresence>
       {task && (
@@ -88,164 +174,110 @@ export function TaskDetailSheet({
             transition={{ type: 'spring', stiffness: 340, damping: 34 }}
             data-testid="task-detail-sheet"
             style={{
-              position: 'fixed',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: 'min(400px, 100vw)',
-              zIndex: 'var(--z-panel)' as any,
-              background: 'color-mix(in srgb, var(--bg) 90%, black)',
-              backdropFilter: 'blur(24px) saturate(140%)',
-              borderLeft: '1px solid var(--border-accent)',
-              padding: 24,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 22,
-              overflowY: 'auto',
+              position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(400px, 100vw)', zIndex: 'var(--z-panel)' as any,
+              background: 'color-mix(in srgb, var(--bg) 90%, black)', backdropFilter: 'blur(24px) saturate(140%)', borderLeft: '1px solid var(--border-accent)',
+              padding: 24, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden',
             }}
             className="scroll-thin"
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <p className="text-section-label">TASK</p>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="close"
-                style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: 8, color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 15 }}
-              >
-                ×
-              </button>
-            </div>
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute', left: '50%', bottom: -80, width: 280, height: 280, borderRadius: '50%',
+                background: `radial-gradient(circle, ${anchor?.color ?? 'var(--accent)'}, transparent 70%)`,
+                filter: 'blur(80px)', opacity: 0.14, transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 0,
+              }}
+            />
 
-            <div>
-              <input
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                onBlur={commitRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                }}
-                data-testid="task-detail-name-input"
-                style={{
-                  width: '100%',
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: '1px solid var(--border-accent)',
-                  outline: 'none',
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 20,
-                  padding: '4px 0',
-                }}
-              />
-              <p className="text-meta" style={{ marginTop: 8, fontSize: 11 }}>
-                created {relativeTime(task.created_at)} · updated {relativeTime(task.updated_at)}
-                {task.aes_score != null && ` · AES ${task.aes_score}`}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-section-label" style={{ marginBottom: 10 }}>ANCHOR</p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                <AnchorBadge
-                  name="none"
-                  color="var(--text-tertiary)"
-                  interactive
-                  selected={!task.anchor_id}
-                  onClick={() => onSetAnchor(task.id, null)}
-                />
-                {anchors.map((a) => (
-                  <AnchorBadge
-                    key={a.id}
-                    name={a.name}
-                    color={a.color}
-                    interactive
-                    selected={task.anchor_id === a.id}
-                    onClick={() => onSetAnchor(task.id, a.id)}
-                  />
-                ))}
+            <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 22 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <p className="text-section-label">TASK</p>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="close"
+                  style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: 8, color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 15 }}
+                >
+                  ×
+                </button>
               </div>
-              {anchors.length === 0 && (
-                <p className="text-meta" style={{ fontSize: 11, opacity: 0.5, marginTop: 6 }}>
-                  No anchors yet — create one from the Tasks page.
-                </p>
-              )}
-            </div>
 
-            <div>
-              <p className="text-section-label" style={{ marginBottom: 10 }}>ENERGY</p>
-              <EnergySelector value={task.energy_level ?? 'medium'} onChange={(level) => onSetEnergy(task.id, level)} />
-            </div>
-
-            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ height: 1, background: 'var(--border)', marginBottom: 4 }} />
-
-              {task.status === 'active' && (
-                <>
-                  <ActionButton label="start task" tone="accent" onClick={() => onStart(task)} testId="detail-start" />
-                  <ActionButton label="mark done" tone="success" onClick={() => onMarkDone(task)} testId="detail-done" />
-                  <ActionButton label="send to limbo" tone="neutral" onClick={() => onSendToLimbo(task)} testId="detail-limbo" />
-                </>
-              )}
-              {task.status === 'limbo' && (
-                <>
-                  <ActionButton label="restore to active" tone="accent" onClick={() => onRestore(task)} testId="detail-restore" />
-                  <ActionButton label="archive" tone="neutral" onClick={() => onArchive(task)} testId="detail-archive" />
-                </>
-              )}
-              {task.status === 'done' && (
-                <ActionButton label="reopen (send to active)" tone="accent" onClick={() => onRestore(task)} testId="detail-reopen" />
-              )}
-              {task.status === 'archived' && (
-                <ActionButton label="restore to active" tone="accent" onClick={() => onRestore(task)} testId="detail-restore" />
-              )}
-
-              {!confirmingDelete ? (
-                <ActionButton label="delete task" tone="danger" onClick={() => setConfirmingDelete(true)} testId="detail-delete-prompt" />
-              ) : (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <ActionButton label="cancel" tone="neutral" onClick={() => setConfirmingDelete(false)} />
-                  <ActionButton
-                    label="confirm delete"
-                    tone="danger"
-                    testId="detail-delete-confirm"
-                    onClick={() => {
-                      onDelete(task)
-                      onClose()
-                    }}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {anchor && <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', background: anchor.color, boxShadow: `0 0 8px ${anchor.color}`, flexShrink: 0 }} />}
+                  <input
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                    data-testid="task-detail-name-input"
+                    style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-accent)', outline: 'none', color: 'var(--text-primary)', fontFamily: 'var(--font-display)', fontSize: 20, padding: '4px 0' }}
                   />
                 </div>
-              )}
+                <p className="text-meta" style={{ marginTop: 8, fontSize: 11 }}>
+                  created {relativeTime(task.created_at)} · updated {relativeTime(task.updated_at)}
+                  {task.aes_score != null && ` · AES ${task.aes_score}`}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-section-label" style={{ marginBottom: 10 }}>ANCHOR</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <AnchorBadge name="none" color="var(--text-tertiary)" interactive selected={!task.anchor_id} onClick={() => onSetAnchor(task.id, null)} />
+                  {anchors.map((a) => (
+                    <AnchorBadge key={a.id} name={a.name} color={a.color} interactive selected={task.anchor_id === a.id} onClick={() => onSetAnchor(task.id, a.id)} />
+                  ))}
+                </div>
+                {anchors.length === 0 && <p className="text-meta" style={{ fontSize: 11, opacity: 0.5, marginTop: 6 }}>No anchors yet — create one from the Tasks toolbar.</p>}
+              </div>
+
+              <div>
+                <p className="text-section-label" style={{ marginBottom: 10 }}>ENERGY</p>
+                <EnergySelector value={task.energy_level ?? 'medium'} onChange={(level) => onSetEnergy(task.id, level)} />
+              </div>
+
+              <div style={{ height: 1, background: 'var(--border)' }} />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {actions.map((a) => (
+                  <ActionTile key={a.label} {...a} />
+                ))}
+              </div>
+
+              <div>
+                {!confirmingDelete ? (
+                  <button
+                    type="button"
+                    data-testid="detail-delete-prompt"
+                    onClick={() => setConfirmingDelete(true)}
+                    style={{ width: '100%', padding: '10px 0', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'pointer' }}
+                  >
+                    delete task
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(false)}
+                      style={{ flex: 1, padding: '10px 0', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: 12.5, cursor: 'pointer' }}
+                    >
+                      cancel
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="detail-delete-confirm"
+                      onClick={() => { onDelete(task); onClose() }}
+                      style={{ flex: 1, padding: '10px 0', background: 'color-mix(in srgb, var(--danger) 14%, transparent)', border: '1px solid var(--danger)', borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: 12.5, cursor: 'pointer' }}
+                    >
+                      confirm delete
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         </>
       )}
     </AnimatePresence>
-  )
-}
-
-function ActionButton({
-  label,
-  tone,
-  onClick,
-  testId,
-}: {
-  label: string
-  tone: 'accent' | 'success' | 'neutral' | 'danger'
-  onClick: () => void
-  testId?: string
-}) {
-  const color =
-    tone === 'accent' ? 'var(--accent)' : tone === 'success' ? 'var(--success)' : tone === 'danger' ? 'var(--danger)' : 'var(--text-secondary)'
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={testId}
-      className="glass glass-interactive"
-      style={{ flex: 1, padding: '10px 0', border: 'none', color, fontSize: 13, cursor: 'pointer' }}
-    >
-      {label}
-    </button>
   )
 }

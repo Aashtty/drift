@@ -23,17 +23,6 @@ interface SessionSeed {
   recovered: boolean
 }
 
-/**
- * Resolves the seed (fresh vs. recovered) once, then renders <NowSession>
- * only after that resolution — never before. This is the actual fix for
- * recovery: <NowSession> mounting for the first time IS the first render
- * of useElasticTimer's internal useState(() => ...) initializer, so by
- * construction that first render always already has the correct seed.
- * The previous version mounted the timer immediately and tried to patch
- * its start time in afterward via a state update — but useState's lazy
- * initializer only ever runs once, on that first mount, so the patch
- * arrived one render too late to matter and silently did nothing.
- */
 export default function NowPage() {
   const params = useSearchParams()
   const { user } = useUser()
@@ -154,7 +143,16 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
     if (taskId) void updateTask(taskId, { name: newName })
   }
 
-  async function endAndRoute(path: string) {
+  // `restingState` is the real fix for the color-bleed bug: ending a
+  // session used to always call transition('DRIFT') regardless of
+  // where you were headed next. That was fine on the way to
+  // drift-summary (which itself resets to IDLE when you hit Continue),
+  // but "End session" routes straight back to '/' with no such reset —
+  // so the whole app stayed tinted DRIFT's color (amber) indefinitely,
+  // which is exactly what showed up as an unexpectedly orange Tasks
+  // page. Dashboard/Tasks now also force IDLE defensively on mount, so
+  // this is fixed twice over — at the source and as a safety net.
+  async function endAndRoute(path: string, restingState: 'IDLE' | 'DRIFT') {
     if (!user || ending) return
     setEnding(true)
     const stateAtEnd = phase === 'FLOW' ? 'FLOW' : 'FOCUS'
@@ -164,7 +162,7 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
       console.error('Session failed to save:', err?.message ?? err)
       toast.error("Couldn't save this session — your focus time this round wasn't recorded.")
     }
-    transition('DRIFT')
+    transition(restingState)
     router.push(path)
   }
 
@@ -194,8 +192,8 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
         paused={paused}
         ending={ending}
         todayFocusedSeconds={todayFocusedSeconds != null ? todayFocusedSeconds + elapsedSeconds : null}
-        onDone={() => void endAndRoute('/drift-summary')}
-        onEnd={() => void endAndRoute('/')}
+        onDone={() => void endAndRoute('/drift-summary', 'DRIFT')}
+        onEnd={() => void endAndRoute('/', 'IDLE')}
         onLockIn={handleLockIn}
         onTogglePause={handleTogglePause}
         onRename={taskId ? handleRename : undefined}
