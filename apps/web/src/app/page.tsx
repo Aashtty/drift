@@ -13,6 +13,7 @@ import { TaskList } from '@/components/tasks/TaskList'
 import { TaskDetailSheet } from '@/components/tasks/TaskDetailSheet'
 import { QuickAddTask } from '@/components/tasks/QuickAddTask'
 import { UpcomingEvents } from '@/components/events/UpcomingEvents'
+import { FocusPathWidget } from '@/components/core/FocusPathWidget'
 import { useUser } from '@/hooks/useUser'
 import { useCalendarBridge } from '@/hooks/useCalendarBridge'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -65,13 +66,11 @@ function SectionHeader({ label, action }: { label: string; action?: React.ReactN
 }
 
 /**
- * Complete layout rebuild: a real two-column grid that scales up to
- * 1360px instead of a fixed ~1000px block stranded top-left with
- * everything below and to the right left blank. Dashboard stays a
- * calm glance (no search/sort/bulk actions — that's /tasks) but now
- * fills the space it's given: a resume-session banner, quick add,
- * a 4-up stat row, a curated task feed, and a right rail with the
- * day's schedule plus a clickable anchor breakdown.
+ * New: FocusPathWidget sits right under the greeting — a guarded map of
+ * the 5-state lifecycle with the two real next moves (start a session,
+ * end the day) as actual buttons, replacing "select a state" with
+ * "here's what you can actually do from here." See FocusPathWidget.tsx
+ * for why this isn't a free 5-way picker.
  */
 export default function DashboardPage() {
   const { user } = useUser()
@@ -89,15 +88,6 @@ export default function DashboardPage() {
   const [detailTask, setDetailTask] = useState<Task | null>(null)
   const [todayStats, setTodayStats] = useState<{ minutes: number; sessions: number } | null>(null)
 
-  // Dashboard/Tasks are never "in a session" — force the ambient accent
-  // back to neutral on arrival regardless of what state a prior /now
-  // visit left behind (this is the fix for the whole-app-turned-amber
-  // bug — see now/page.tsx's endAndRoute for the source-side half of
-  // the fix). Uses the unguarded setState rather than transition()
-  // since this is a deliberate "return to baseline" reset triggered by
-  // navigation, not a step in the session state machine, and IDLE
-  // isn't confirmed reachable via a guarded transition from every
-  // state the app might have been left in.
   useEffect(() => {
     setState('IDLE')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,12 +117,6 @@ export default function DashboardPage() {
     router.push(`/now?${searchParams.toString()}`)
   }
 
-  // Quick-added tasks previously stayed unscored forever — nothing on
-  // this path ever called the scorer (only Brain Dump did), so the
-  // "scoring…" indicator on TaskCard would pulse indefinitely. The task
-  // still appears instantly, then gets scored in the background exactly
-  // like a Brain Dump entry would, patching in aes_score/energy_level
-  // once it resolves.
   function quickAdd(name: string, anchorId: string | null) {
     if (!user) return
     const id = crypto.randomUUID()
@@ -193,17 +177,21 @@ export default function DashboardPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.5 }}
           className="text-meta"
-          style={{ marginBottom: 22, fontSize: 13.5 }}
+          style={{ marginBottom: 20, fontSize: 13.5 }}
         >
           {activeTasks.length > 0 ? `${activeTasks.length} on the board today` : 'nothing on the board yet — add something to start'}
         </motion.p>
+
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13, duration: 0.4 }} style={{ marginBottom: 20 }}>
+          <FocusPathWidget />
+        </motion.div>
 
         {activeSession && (
           <motion.button
             type="button"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.14, duration: 0.4 }}
+            transition={{ delay: 0.16, duration: 0.4 }}
             onClick={() => startTask(activeSession.taskId ?? '', resumeTaskName ?? 'a task', null)}
             data-testid="resume-session-card"
             className="glass glass-interactive"
@@ -223,18 +211,18 @@ export default function DashboardPage() {
           </motion.button>
         )}
 
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.16, duration: 0.4 }} style={{ marginBottom: 20 }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.19, duration: 0.4 }} style={{ marginBottom: 20 }}>
           <QuickAddTask onAdd={quickAdd} anchors={anchors} />
         </motion.div>
 
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.19, duration: 0.4 }} style={{ display: 'flex', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22, duration: 0.4 }} style={{ display: 'flex', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
           <StatChip label="focused today" value={todayStats ? `${todayStats.minutes}m` : '—'} />
           <StatChip label="sessions" value={todayStats ? String(todayStats.sessions) : '—'} />
           <StatChip label="done today" value={String(doneToday.length)} />
           <StatChip label={`momentum ${trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'}`} value={String(score)} accent />
         </motion.div>
 
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22, duration: 0.4 }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25, duration: 0.4 }}>
           <SectionHeader
             label="UP NEXT"
             action={
@@ -247,7 +235,7 @@ export default function DashboardPage() {
           />
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
           <TaskList
             tasks={tasks}
             anchorFor={anchorFor}

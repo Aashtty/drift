@@ -7,7 +7,7 @@ import { useTaskEngine } from '@/hooks/useTaskEngine'
 import { useTaskDecay } from '@/hooks/useTaskDecay'
 import { useAppState } from '@/hooks/useAppState'
 import { TaskList } from '@/components/tasks/TaskList'
-import { LimboPanel } from '@/components/tasks/LimboPanel'
+import { VaultPanel } from '@/components/tasks/VaultPanel'
 import { QuickAddTask } from '@/components/tasks/QuickAddTask'
 import { AnchorManager } from '@/components/tasks/AnchorManager'
 import { AnchorBadge } from '@/components/tasks/AnchorBadge'
@@ -47,6 +47,15 @@ function ClockIcon() {
       <circle cx="8" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.3" />
       <path d="M8 5.5V8.5L10 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M6 1.5h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+function ArchiveBoxIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="3" width="12" height="3" rx="1" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M3 6.5V12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M6.5 9h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }
@@ -98,25 +107,52 @@ function RailCard({ title, children }: { title: string; children: React.ReactNod
     </div>
   )
 }
-function MiniStat({ label, value }: { label: string; value: number }) {
+function MiniStat({ label, value, onClick }: { label: string; value: number; onClick?: () => void }) {
   return (
-    <div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      style={{ textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: onClick ? 'pointer' : 'default' }}
+    >
       <p style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{value}</p>
-      <p className="text-micro-mono" style={{ marginTop: 2 }}>{label}</p>
-    </div>
+      <p className="text-micro-mono" style={{ marginTop: 2, color: onClick ? 'var(--accent)' : 'var(--text-tertiary)' }}>{label}</p>
+    </button>
   )
 }
 
 /**
- * Complete layout rebuild, same spirit as Dashboard: a real two-column
- * grid up to 1360px instead of a fixed ~480px-wide list floating with
- * blank space on every side. The toolbar (quick add / search / sort /
- * anchor filter) is now grouped inside one cohesive card instead of
- * loose rows on bare background, and the right rail adds three
- * genuinely new glanceable widgets — overview counts, an energy
- * breakdown, and an anchor breakdown — using data that was already
- * available but never surfaced anywhere.
+ * Toolbar's separate "Limbo" and "Archive" buttons are now one grouped
+ * segmented control that opens the same VaultPanel at the right tab —
+ * previously two visually unrelated pill buttons opening two nearly
+ * identical popups, which was the actual source of "what's the
+ * difference between these." Overview's "in limbo" / "archived" numbers
+ * are now clickable too, offering the same deep-link from a second spot.
  */
+function VaultToolbarControl({ limboCount, archivedCount, onOpen }: { limboCount: number; archivedCount: number; onOpen: (tab: 'limbo' | 'archived') => void }) {
+  return (
+    <div className="glass" style={{ display: 'flex', alignItems: 'center', borderRadius: 'var(--radius-full)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+      <button
+        type="button"
+        data-testid="vault-limbo-trigger"
+        onClick={() => onOpen('limbo')}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}
+      >
+        <ClockIcon /> Limbo {limboCount > 0 && <CountBadge>{limboCount}</CountBadge>}
+      </button>
+      <div aria-hidden="true" style={{ width: 1, height: 18, background: 'var(--border)' }} />
+      <button
+        type="button"
+        data-testid="vault-archive-trigger"
+        onClick={() => onOpen('archived')}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}
+      >
+        <ArchiveBoxIcon /> Archived {archivedCount > 0 && <CountBadge>{archivedCount}</CountBadge>}
+      </button>
+    </div>
+  )
+}
+
 export default function TasksPage() {
   const { user } = useUser()
   const router = useRouter()
@@ -129,18 +165,16 @@ export default function TasksPage() {
   useTaskDecay()
 
   useEffect(() => {
-    // See app/page.tsx for the full explanation of why this is here.
     setState('IDLE')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const [limboOpen, setLimboOpen] = useState(false)
+  const [vaultOpen, setVaultOpen] = useState(false)
+  const [vaultTab, setVaultTab] = useState<'limbo' | 'archived'>('limbo')
   const [anchorManagerOpen, setAnchorManagerOpen] = useState(false)
   const [detailTask, setDetailTask] = useState<Task | null>(null)
   const [search, setSearch] = useState('')
   const [sortMode, setSortMode] = useState<SortMode>('aes')
-  // Pre-filled from ?anchor=<id> so the Dashboard's anchor breakdown
-  // widget can deep-link straight into a filtered view here.
   const [anchorFilter, setAnchorFilter] = useState<string | null>(() => searchParams.get('anchor'))
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -206,6 +240,11 @@ export default function TasksPage() {
     .map((a) => ({ anchor: a, count: activeTasks.filter((t) => t.anchor_id === a.id).length }))
     .sort((a, b) => b.count - a.count)
 
+  function openVault(tab: 'limbo' | 'archived') {
+    setVaultTab(tab)
+    setVaultOpen(true)
+  }
+
   function startTask(taskId: string, name: string, anchorName: string | null) {
     const p = new URLSearchParams({ taskId, task: name })
     if (anchorName) p.set('anchor', anchorName)
@@ -262,23 +301,28 @@ export default function TasksPage() {
     clearSelection()
   }
 
+  function handleDeletePermanently(id: string) {
+    const t = archivedTasks.find((x) => x.id === id)
+    void removeTask(id)
+    toast.info(`"${t?.name ?? 'Task'}" permanently deleted.`)
+  }
+
   return (
     <main style={{ padding: 56, maxWidth: 1360, margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: 40, alignItems: 'start' }}>
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <p className="text-section-label">TASKS</p>
-            <p className="text-meta" style={{ marginTop: 4, fontSize: 13 }}>{activeTasks.length} active · {limboTasks.length} in limbo</p>
+            <p className="text-meta" style={{ marginTop: 4, fontSize: 13 }}>
+              {activeTasks.length} active · {limboTasks.length} in limbo{archivedTasks.length > 0 && ` · ${archivedTasks.length} archived`}
+            </p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <ToolbarButton testId="anchor-manager-trigger" onClick={() => setAnchorManagerOpen(true)}>anchors</ToolbarButton>
+            <ToolbarButton testId="anchor-manager-trigger" onClick={() => setAnchorManagerOpen(true)}>Anchors</ToolbarButton>
             <ToolbarButton testId="selection-mode-toggle" active={selectionMode} onClick={() => (selectionMode ? clearSelection() : setSelectionMode(true))}>
-              <SelectIcon /> select
+              <SelectIcon /> Select
             </ToolbarButton>
-            <ToolbarButton testId="limbo-trigger" onClick={() => setLimboOpen(true)}>
-              <ClockIcon /> limbo
-              {limboTasks.length > 0 && <CountBadge>{limboTasks.length}</CountBadge>}
-            </ToolbarButton>
+            <VaultToolbarControl limboCount={limboTasks.length} archivedCount={archivedTasks.length} onOpen={openVault} />
           </div>
         </div>
 
@@ -354,8 +398,8 @@ export default function TasksPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <MiniStat label="active" value={activeTasks.length} />
             <MiniStat label="done today" value={completedToday.length} />
-            <MiniStat label="in limbo" value={limboTasks.length} />
-            <MiniStat label="archived" value={archivedTasks.length} />
+            <MiniStat label="in limbo" value={limboTasks.length} onClick={() => openVault('limbo')} />
+            <MiniStat label="archived" value={archivedTasks.length} onClick={() => openVault('archived')} />
           </div>
         </RailCard>
 
@@ -397,13 +441,16 @@ export default function TasksPage() {
         )}
       </div>
 
-      <LimboPanel
-        open={limboOpen}
-        onClose={() => setLimboOpen(false)}
-        tasks={limboTasks}
+      <VaultPanel
+        open={vaultOpen}
+        onClose={() => setVaultOpen(false)}
+        initialTab={vaultTab}
+        limboTasks={limboTasks}
+        archivedTasks={archivedTasks}
         onRestore={(id) => setStatus(id, 'active')}
         onArchive={(id) => setStatus(id, 'archived')}
-        onKillAll={() => { for (const t of limboTasks) setStatus(t.id, 'archived') }}
+        onArchiveAll={() => { for (const t of limboTasks) setStatus(t.id, 'archived') }}
+        onDeletePermanently={handleDeletePermanently}
       />
       <AnchorManager open={anchorManagerOpen} onClose={() => setAnchorManagerOpen(false)} userId={user.id} />
       <TaskDetailSheet

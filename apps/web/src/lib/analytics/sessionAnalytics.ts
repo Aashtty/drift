@@ -49,11 +49,10 @@ export function peakHoursWindow(cells: HeatmapCell[]): { startHour: number; endH
 }
 
 export interface WeeklyAvg {
-  weekIndex: number // 0 = 4 weeks ago ... 3 = this week
+  weekIndex: number
   avgMinutes: number
 }
 
-/** Average session length (in minutes) per week, over the last 4 weeks. */
 export function weeklyAverageSessionLength(
   sessions: FocusSession[],
   today: Date = new Date()
@@ -86,7 +85,6 @@ export function weeklyAverageSessionLength(
 export interface SessionSummary {
   totalFocusedMinutes: number
   sessionCount: number
-  /** 0-100 — % of sessions that reached FLOW. */
   flowRate: number
   avgSessionMinutes: number
   hyperfocusCount: number
@@ -106,7 +104,7 @@ export function summarizeSessions(sessions: FocusSession[]): SessionSummary {
 }
 
 export interface WeekdayTotal {
-  weekday: number // 0=Sun..6=Sat
+  weekday: number
   label: string
   totalMinutes: number
 }
@@ -126,11 +124,6 @@ export function weekdayTotals(sessions: FocusSession[]): WeekdayTotal[] {
   }))
 }
 
-/**
- * Deliberately framed as "active on N of the last W days," not a streak
- * counter — a hard streak that resets to zero on one missed day cuts
- * against DRIFT's momentum (gentle decay, not hard reset) philosophy.
- */
 export function activeDaysInWindow(
   sessions: FocusSession[],
   windowDays = 7,
@@ -152,20 +145,11 @@ export function activeDaysInWindow(
 export interface WindowComparison {
   currentMinutes: number
   previousMinutes: number
-  /** null when the previous window had zero minutes — a % change
-   *  against zero is meaningless, so callers should render "—" instead
-   *  of a misleading "+∞%" or "+100%". */
   deltaPercent: number | null
   currentSessions: number
   previousSessions: number
 }
 
-/**
- * Compares the last 7 days against the 7 days before that. Reuses the
- * 28-day session fetch Replay already does — no extra query needed —
- * to give the stat cards actual context instead of a bare number with
- * nothing to compare it against.
- */
 export function compareWeekWindows(sessions: FocusSession[], today: Date = new Date()): WindowComparison {
   const currentStart = new Date(today)
   currentStart.setHours(0, 0, 0, 0)
@@ -173,7 +157,7 @@ export function compareWeekWindows(sessions: FocusSession[], today: Date = new D
 
   const previousStart = new Date(currentStart)
   previousStart.setDate(previousStart.getDate() - 7)
-  const previousEnd = new Date(currentStart) // exclusive
+  const previousEnd = new Date(currentStart)
 
   let currentMinutes = 0
   let previousMinutes = 0
@@ -209,9 +193,6 @@ export interface TopTask {
   totalMinutes: number
 }
 
-/** Which tasks actually consumed the most focus time. This data
- *  (task_id on every session row) already existed but was never
- *  surfaced anywhere on Replay. */
 export function topTasksByFocusTime(sessions: FocusSession[], limit = 5): TopTask[] {
   const totals = new Map<string, number>()
   for (const s of sessions) {
@@ -222,4 +203,101 @@ export function topTasksByFocusTime(sessions: FocusSession[], limit = 5): TopTas
     .map(([taskId, secs]) => ({ taskId, totalMinutes: Math.round(secs / 60) }))
     .sort((a, b) => b.totalMinutes - a.totalMinutes)
     .slice(0, limit)
+}
+
+// ---- New below this line ----
+
+export interface HyperfocusStats {
+  count: number
+  totalMinutes: number
+  longestMinutes: number
+}
+
+/**
+ * `hyperfocus` has been recorded on every session row since the very
+ * first schema, but nothing in Replay ever surfaced it — Lock In's
+ * effect on your actual focus patterns was invisible. This turns it
+ * into three numbers: how often you locked in, how much total time
+ * happened inside a lock-in, and your single longest one.
+ */
+export function hyperfocusStats(sessions: FocusSession[]): HyperfocusStats {
+  const hf = sessions.filter((s) => s.hyperfocus)
+  const totalSeconds = hf.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0)
+  const longestSeconds = hf.reduce((max, s) => Math.max(max, s.duration_seconds ?? 0), 0)
+  return {
+    count: hf.length,
+    totalMinutes: Math.round(totalSeconds / 60),
+    longestMinutes: Math.round(longestSeconds / 60),
+  }
+}
+
+export interface AnchorTime {
+  anchorId: string
+  totalMinutes: number
+}
+
+/**
+ * Sessions only carry a task_id, not an anchor_id directly — so this
+ * takes a resolver function (task_id -> anchor_id) rather than joining
+ * itself, keeping this module free of any store/task-shape dependency.
+ * Which anchors actually consume your focus time was previously
+ * uncomputable anywhere in the app despite every session already
+ * carrying everything needed to derive it.
+ */
+export function anchorTimeBreakdown(
+  sessions: FocusSession[],
+  anchorIdForTask: (taskId: string) => string | null,
+  limit = 6
+): AnchorTime[] {
+  const totals = new Map<string, number>()
+  for (const s of sessions) {
+    if (!s.task_id) continue
+    const anchorId = anchorIdForTask(s.task_id)
+    if (!anchorId) continue
+    totals.set(anchorId, (totals.get(anchorId) ?? 0) + (s.duration_seconds ?? 0))
+  }
+  return Array.from(totals.entries())
+    .map(([anchorId, secs]) => ({ anchorId, totalMinutes: Math.round(secs / 60) }))
+    .sort((a, b) => b.totalMinutes - a.totalMinutes)
+    .slice(0, limit)
+}
+
+export interface PeriodHighlights {
+  longestSessionMinutes: number
+  longestSessionTaskId: string | null
+  bestDay: { date: string; totalMinutes: number } | null
+  activeDays: number
+}
+
+/**
+ * Deliberately named "period highlights" rather than "personal
+ * records" — this only sees whatever window was fetched (7/30/90
+ * days), not true all-time history, so claiming an all-time record off
+ * a bounded query would overclaim what the app actually knows.
+ */
+export function periodHighlights(sessions: FocusSession[]): PeriodHighlights {
+  let longestSessionMinutes = 0
+  let longestSessionTaskId: string | null = null
+  const dayTotals = new Map<string, number>()
+  const activeDates = new Set<string>()
+
+  for (const s of sessions) {
+    const secs = s.duration_seconds ?? 0
+    const mins = Math.round(secs / 60)
+    if (mins > longestSessionMinutes) {
+      longestSessionMinutes = mins
+      longestSessionTaskId = s.task_id
+    }
+    const dateKey = s.started_at.slice(0, 10)
+    dayTotals.set(dateKey, (dayTotals.get(dateKey) ?? 0) + secs)
+    activeDates.add(dateKey)
+  }
+
+  let bestDay: { date: string; totalMinutes: number } | null = null
+  for (const [date, secs] of dayTotals.entries()) {
+    const totalMinutes = Math.round(secs / 60)
+    if (!bestDay || totalMinutes > bestDay.totalMinutes) bestDay = { date, totalMinutes }
+  }
+
+  return { longestSessionMinutes, longestSessionTaskId, bestDay, activeDays: activeDates.size }
 }

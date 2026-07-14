@@ -35,10 +35,6 @@ export async function upsertAnchorRemote(anchor: Anchor): Promise<void> {
   if (error) throw error
 }
 
-/**
- * New — anchors had a create path (`addAnchor`) but no way to remove
- * one, anywhere in the app. Needed for the new Anchor Manager UI.
- */
 export async function deleteAnchorRemote(id: string): Promise<void> {
   const { error } = await supabase.from('anchors').delete().eq('id', id)
   if (error) throw error
@@ -69,16 +65,46 @@ export async function fetchSessionsRemote(userId: string, sinceDaysAgo: number):
 }
 
 interface InsertShutdownArgs {
-  userId: string; completedTaskIds: string[]; carriedTaskIds: string[]
-  anchorTaskId: string | null; notes: string | null
+  userId: string
+  completedTaskIds: string[]
+  carriedTaskIds: string[]
+  /** Renamed from `anchorTaskId` — this is the task chosen as tomorrow's
+   *  single priority during the Shutdown Ritual, unrelated to the
+   *  Anchor tagging system. See migration 004. */
+  priorityTaskId: string | null
+  notes: string | null
 }
 export async function insertShutdownRemote(args: InsertShutdownArgs): Promise<void> {
   const { error } = await supabase.from('shutdowns').insert({
     user_id: args.userId, completed_at: new Date().toISOString(),
     completed_task_ids: args.completedTaskIds, carried_task_ids: args.carriedTaskIds,
-    anchor_task_id: args.anchorTaskId, notes: args.notes,
+    priority_task_id: args.priorityTaskId, notes: args.notes,
   })
   if (error) throw error
+}
+
+export interface ShutdownRecord {
+  id: string
+  user_id: string
+  completed_at: string
+  completed_task_ids: string[]
+  carried_task_ids: string[]
+  /** Renamed from `anchor_task_id` — see migration 004. */
+  priority_task_id: string | null
+  notes: string | null
+}
+
+export async function fetchShutdownsRemote(userId: string, sinceDaysAgo: number): Promise<ShutdownRecord[]> {
+  const since = new Date()
+  since.setDate(since.getDate() - sinceDaysAgo)
+  const { data, error } = await supabase
+    .from('shutdowns')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('completed_at', since.toISOString())
+    .order('completed_at', { ascending: false })
+  if (error) throw error
+  return data as ShutdownRecord[]
 }
 
 export async function fetchSettingsRemote(userId: string): Promise<UserSettings | null> {

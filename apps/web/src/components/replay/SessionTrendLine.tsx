@@ -8,7 +8,7 @@ interface SessionTrendLineProps {
 }
 
 const WIDTH = 320
-const HEIGHT = 100
+const HEIGHT = 110
 const PADDING = 16
 
 function weekLabel(index: number, total: number): string {
@@ -28,14 +28,22 @@ export function SessionTrendLine({ weeks }: SessionTrendLineProps) {
     return { x, y, w }
   })
 
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const lineD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const areaD = `${lineD} L ${points[points.length - 1].x} ${HEIGHT - PADDING} L ${points[0].x} ${HEIGHT - PADDING} Z`
 
   return (
     <div data-testid="session-trend-line">
       <svg width={WIDTH} height={HEIGHT}>
-        <path d={pathD} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" />
+        <defs>
+          <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill="url(#trend-fill)" />
+        <path d={lineD} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" />
         {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={3} fill="var(--accent)">
+          <circle key={i} cx={p.x} cy={p.y} r={3.2} fill="var(--accent)">
             <title>{`${weekLabel(i, weeks.length)} — avg ${p.w.avgMinutes}m per session`}</title>
           </circle>
         ))}
@@ -45,12 +53,9 @@ export function SessionTrendLine({ weeks }: SessionTrendLineProps) {
           <span key={i} className="text-micro-mono">{w.avgMinutes}m</span>
         ))}
       </div>
-      {/* previously no way to tell which point was which week */}
       <div style={{ display: 'flex', justifyContent: 'space-between', width: WIDTH, marginTop: 2 }}>
         {weeks.map((_, i) => (
-          <span key={i} style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>
-            {weekLabel(i, weeks.length)}
-          </span>
+          <span key={i} style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>{weekLabel(i, weeks.length)}</span>
         ))}
       </div>
     </div>

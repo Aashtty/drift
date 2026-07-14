@@ -100,13 +100,10 @@ function ActionTile({ label, icon, tone, onClick, testId }: ActionDescriptor) {
 }
 
 /**
- * Rebuilt to fix the dead space in the middle of the panel: the old
- * version used `marginTop: auto` to force its actions to the very
- * bottom of a full-height sheet, which on a task with just a couple of
- * fields set left a large, visually broken empty gap. Actions now
- * follow the content directly as a compact 2-column icon grid, and a
- * soft ambient glow (tinted to the task's anchor color, if any) fills
- * whatever space is genuinely left over instead of a flat void.
+ * Action labels moved to Title Case ("Start Task", "Mark Done", etc.)
+ * — these are functional button/tile labels, the same category of
+ * element as the sidebar's nav links, so they follow that same
+ * convention rather than the app's lowercase headline voice.
  */
 export function TaskDetailSheet({
   task,
@@ -142,18 +139,18 @@ export function TaskDetailSheet({
     ? []
     : task.status === 'active'
     ? [
-        { label: 'start task', icon: <PlayIcon />, tone: 'accent', onClick: () => onStart(task), testId: 'detail-start' },
-        { label: 'mark done', icon: <CheckIcon />, tone: 'success', onClick: () => onMarkDone(task), testId: 'detail-done' },
-        { label: 'send to limbo', icon: <ClockIcon />, tone: 'neutral', onClick: () => onSendToLimbo(task), testId: 'detail-limbo' },
+        { label: 'Start Task', icon: <PlayIcon />, tone: 'accent', onClick: () => onStart(task), testId: 'detail-start' },
+        { label: 'Mark Done', icon: <CheckIcon />, tone: 'success', onClick: () => onMarkDone(task), testId: 'detail-done' },
+        { label: 'Send To Limbo', icon: <ClockIcon />, tone: 'neutral', onClick: () => onSendToLimbo(task), testId: 'detail-limbo' },
       ]
     : task.status === 'limbo'
     ? [
-        { label: 'restore to active', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-restore' },
-        { label: 'archive', icon: <ArchiveIcon />, tone: 'neutral', onClick: () => onArchive(task), testId: 'detail-archive' },
+        { label: 'Restore To Active', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-restore' },
+        { label: 'Archive', icon: <ArchiveIcon />, tone: 'neutral', onClick: () => onArchive(task), testId: 'detail-archive' },
       ]
     : task.status === 'done'
-    ? [{ label: 'reopen task', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-reopen' }]
-    : [{ label: 'restore to active', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-restore' }]
+    ? [{ label: 'Reopen Task', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-reopen' }]
+    : [{ label: 'Restore To Active', icon: <RestoreIcon />, tone: 'accent', onClick: () => onRestore(task), testId: 'detail-restore' }]
 
   return (
     <AnimatePresence>
@@ -252,7 +249,7 @@ export function TaskDetailSheet({
                     onClick={() => setConfirmingDelete(true)}
                     style={{ width: '100%', padding: '10px 0', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'pointer' }}
                   >
-                    delete task
+                    Delete Task
                   </button>
                 ) : (
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -261,7 +258,7 @@ export function TaskDetailSheet({
                       onClick={() => setConfirmingDelete(false)}
                       style={{ flex: 1, padding: '10px 0', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: 12.5, cursor: 'pointer' }}
                     >
-                      cancel
+                      Cancel
                     </button>
                     <button
                       type="button"
@@ -269,7 +266,7 @@ export function TaskDetailSheet({
                       onClick={() => { onDelete(task); onClose() }}
                       style={{ flex: 1, padding: '10px 0', background: 'color-mix(in srgb, var(--danger) 14%, transparent)', border: '1px solid var(--danger)', borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: 12.5, cursor: 'pointer' }}
                     >
-                      confirm delete
+                      Confirm Delete
                     </button>
                   </div>
                 )}

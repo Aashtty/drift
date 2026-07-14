@@ -9,6 +9,7 @@ import { CaptureButton } from '@/components/core/CaptureButton'
 import { Sidebar } from '@/components/core/Sidebar'
 import { Onboarding } from '@/components/onboarding/Onboarding'
 import { ShortcutCheatSheet } from '@/components/core/ShortcutCheatSheet'
+import { CommandPalette } from '@/components/core/CommandPalette'
 import { Toast } from '@/components/core/Toast'
 import { useCheatSheetShortcut } from '@/hooks/useCheatSheetShortcut'
 import { useTaskStore } from '@/stores/taskStore'
@@ -49,6 +50,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { shouldShow: showOnboarding, markSeen } = useOnboarding(user?.id ?? null)
   const [brainDumpOpenFromOnboarding, setBrainDumpOpenFromOnboarding] = useState(false)
   const cheatSheet = useCheatSheetShortcut()
+  // New — Cmd/Ctrl+K opens a global command palette. Kept as local
+  // state here (rather than a store) since only this one place needs
+  // to know about it; every trigger (sidebar button, keyboard shortcut,
+  // the palette's own "keyboard shortcuts" entry) just calls setOpen.
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname)
   const hideSidebar = NO_SIDEBAR_ROUTES.some((r) => matchesRoute(pathname, r)) || isPublicRoute
@@ -58,15 +64,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!loading && !user && !isPublicRoute) router.push('/login')
   }, [loading, user, isPublicRoute, router])
 
+  useEffect(() => {
+    if (isPublicRoute || showOnboarding) return
+    function handler(e: KeyboardEvent) {
+      const modifier = e.metaKey || e.ctrlKey
+      if (modifier && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((p) => !p)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isPublicRoute, showOnboarding])
+
   function anchorNameToId(name: string | null): string | null {
     if (!name) return null
     return anchors.find((a) => a.name.toLowerCase() === name.toLowerCase())?.id ?? null
   }
 
-  // Now gives explicit feedback either way — the capture never used to
-  // confirm it worked, so a person closing the modal had no way to tell
-  // "organized nicely" from "silently fell back to raw lines" from
-  // "actually did nothing."
   async function handleBrainDumpSubmit(rawText: string) {
     if (!user) return
     try {
@@ -97,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <>
       {user && showOnboarding && <Onboarding onFinish={finishOnboarding} />}
       <div style={{ position: 'relative', zIndex: 1, display: 'flex' }}>
-        {!hideSidebar && !showOnboarding && <Sidebar />}
+        {!hideSidebar && !showOnboarding && <Sidebar onOpenPalette={() => setPaletteOpen(true)} onOpenShortcuts={() => cheatSheet.setOpen(true)} />}
         <div style={{ flex: 1 }}>{children}</div>
       </div>
       {user && !isPublicRoute && !showOnboarding && (
@@ -109,6 +124,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
       {showCapture && <CaptureButton />}
       <ShortcutCheatSheet open={cheatSheet.open} onClose={() => cheatSheet.setOpen(false)} />
+      {user && !isPublicRoute && !showOnboarding && (
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onOpenShortcuts={() => cheatSheet.setOpen(true)} />
+      )}
       <Toast />
     </>
   )

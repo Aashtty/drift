@@ -9,13 +9,13 @@ interface ShutdownRitualProps {
   completedTasks: Task[]
   incompleteTasks: Task[]
   onAddCompletedTask: (name: string) => Promise<Task>
-  /** Now expected to be async and to throw on failure — the ritual
-   *  awaits it before showing the closing screen, instead of firing it
-   *  inside a setTimeout after the closing screen already started. */
   onComplete: (result: {
     completedTaskIds: string[]
     carriedTaskIds: string[]
-    anchorText: string
+    /** Renamed from `anchorText` — was sharing the word "anchor" with
+     *  the unrelated task-tagging Anchors, which read as confusing next
+     *  to actual Anchor badges elsewhere in the app. */
+    focusText: string
   }) => Promise<void>
 }
 
@@ -35,7 +35,7 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
   const [extraFinished, setExtraFinished] = useState('')
   const [adding, setAdding] = useState(false)
   const [carryOver, setCarryOver] = useState<Task[]>(incompleteTasks)
-  const [anchorText, setAnchorText] = useState('')
+  const [focusText, setFocusText] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const allCompleted = [...completedTasks, ...extraCompleted]
@@ -70,15 +70,10 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
   }
 
   function goToQ3() {
-    setAnchorText(carryOver[0]?.name ?? '')
+    setFocusText(carryOver[0]?.name ?? '')
     setStep(3)
   }
 
-  // The save now happens BEFORE the closing screen, not during it. The
-  // old flow showed "good work, you showed up." for a fixed 3s and only
-  // then wrote to the DB inside that window — closing the laptop or
-  // navigating away during that visual meant the whole reflection was
-  // silently never saved, with no error handling anywhere in the chain.
   async function finish() {
     setStep('saving')
     setSaveError(null)
@@ -86,7 +81,7 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
       await onComplete({
         completedTaskIds: Array.from(checked),
         carriedTaskIds: carryOver.map((t) => t.id),
-        anchorText,
+        focusText,
       })
       setStep('closing')
     } catch (err: any) {
@@ -100,14 +95,10 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
     <div
       data-testid="shutdown-ritual"
       style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 200,
+        position: 'fixed', inset: 0, zIndex: 'var(--z-fullscreen)' as any,
         background: step === 'closing' ? '#000' : 'rgba(10,10,26,0.85)',
         backdropFilter: step === 'closing' ? 'none' : 'blur(20px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background 800ms var(--ease-focus)',
       }}
     >
@@ -121,11 +112,7 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {allCompleted.map((t) => (
                 <label key={t.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={checked.has(t.id)}
-                    onChange={() => toggleChecked(t.id)}
-                  />
+                  <input type="checkbox" checked={checked.has(t.id)} onChange={() => toggleChecked(t.id)} />
                   <span>{t.name}</span>
                 </label>
               ))}
@@ -135,14 +122,7 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
                 placeholder={adding ? 'adding...' : '[type to add more, press Enter]'}
                 disabled={adding}
                 data-testid="shutdown-extra-input"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: '1px solid var(--border)',
-                  outline: 'none',
-                  color: 'var(--text-secondary)',
-                  padding: '4px 0',
-                }}
+                style={{ background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', outline: 'none', color: 'var(--text-secondary)', padding: '4px 0' }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
@@ -151,14 +131,7 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
                 }}
               />
             </div>
-            <button
-              type="button"
-              onClick={goToQ2}
-              style={{
-                marginTop: 24, float: 'right', background: 'none', border: 'none',
-                color: 'var(--accent)', fontSize: 14, cursor: 'pointer',
-              }}
-            >
+            <button type="button" onClick={goToQ2} style={{ marginTop: 24, float: 'right', background: 'none', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer' }}>
               next →
             </button>
           </motion.div>
@@ -178,18 +151,10 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
               ))}
             </Reorder.Group>
             <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 14, cursor: 'pointer' }}
-              >
+              <button type="button" onClick={() => setStep(1)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 14, cursor: 'pointer' }}>
                 ← back
               </button>
-              <button
-                type="button"
-                onClick={goToQ3}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer' }}
-              >
+              <button type="button" onClick={goToQ3} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer' }}>
                 next →
               </button>
             </div>
@@ -200,17 +165,13 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
           <motion.div key="q3" {...crossfade} style={{ width: 480 }}>
             <p className="text-meta">Q 3 of 3</p>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, margin: '8px 0 24px' }}>
-              one thing. tomorrow's anchor:
+              one thing. tomorrow's focus:
             </h2>
             <input
-              value={anchorText}
-              onChange={(e) => setAnchorText(e.target.value)}
-              style={{
-                width: '100%', background: 'transparent', border: 'none',
-                borderBottom: '1px solid var(--border-accent)', outline: 'none',
-                color: 'var(--text-primary)', fontSize: 18, padding: '8px 0',
-              }}
-              data-testid="anchor-input"
+              value={focusText}
+              onChange={(e) => setFocusText(e.target.value)}
+              style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-accent)', outline: 'none', color: 'var(--text-primary)', fontSize: 18, padding: '8px 0' }}
+              data-testid="shutdown-focus-input"
             />
             {saveError && (
               <p style={{ marginTop: 12, fontSize: 12.5, color: 'var(--danger)' }} data-testid="shutdown-save-error">
@@ -218,19 +179,10 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
               </p>
             )}
             <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 14, cursor: 'pointer' }}
-              >
+              <button type="button" onClick={() => setStep(2)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 14, cursor: 'pointer' }}>
                 ← back
               </button>
-              <button
-                type="button"
-                data-testid="shutdown-confirm"
-                onClick={() => void finish()}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer' }}
-              >
+              <button type="button" data-testid="shutdown-confirm" onClick={() => void finish()} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer' }}>
                 done →
               </button>
             </div>
@@ -238,27 +190,13 @@ export function ShutdownRitual({ completedTasks, incompleteTasks, onAddCompleted
         )}
 
         {step === 'saving' && (
-          <motion.p
-            key="saving"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.7 }}
-            transition={{ duration: 0.3 }}
-            style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display)', fontSize: 18 }}
-            data-testid="shutdown-saving-text"
-          >
+          <motion.p key="saving" initial={{ opacity: 0 }} animate={{ opacity: 0.7 }} transition={{ duration: 0.3 }} style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display)', fontSize: 18 }} data-testid="shutdown-saving-text">
             wrapping up…
           </motion.p>
         )}
 
         {step === 'closing' && (
-          <motion.p
-            key="closing"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1 }}
-            style={{ color: '#fff', fontFamily: 'var(--font-display)', fontSize: 24 }}
-            data-testid="shutdown-closing-text"
-          >
+          <motion.p key="closing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }} style={{ color: '#fff', fontFamily: 'var(--font-display)', fontSize: 24 }} data-testid="shutdown-closing-text">
             good work. you showed up.
           </motion.p>
         )}
