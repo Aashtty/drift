@@ -2,30 +2,37 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/db/supabase'
 
-const STORAGE_KEY = 'drift-onboarding-seen'
+function storageKeyFor(userId: string): string {
+  return `drift-onboarding-seen:${userId}`
+}
 
+/**
+ * Real bug fix: this key used to be a single global
+ * 'drift-onboarding-seen' with no user scoping - on a shared device,
+ * one account finishing onboarding silently skipped it for every OTHER
+ * account that ever signed in on that browser. Scoped per user id now.
+ */
 export function useOnboarding(userId: string | null) {
   const [shouldShow, setShouldShow] = useState(false)
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
     if (!userId) return
+    const currentUserId = userId
+    setChecked(false)
 
     async function check() {
-      // Fast local check first (avoids a flash on every reload for existing users)
-      const seenLocally = localStorage.getItem(STORAGE_KEY) === 'true'
+      const seenLocally = localStorage.getItem(storageKeyFor(currentUserId)) === 'true'
       if (seenLocally) {
         setShouldShow(false)
         setChecked(true)
         return
       }
 
-      // Authoritative check: has this user ever completed a shutdown or logged
-      // a session? If so, they're clearly not brand-new even on a fresh device.
       const { count: sessionCount } = await supabase
         .from('sessions')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
+        .eq('user_id', currentUserId)
 
       const isNew = (sessionCount ?? 0) === 0
       setShouldShow(isNew)
@@ -35,7 +42,7 @@ export function useOnboarding(userId: string | null) {
   }, [userId])
 
   function markSeen() {
-    localStorage.setItem(STORAGE_KEY, 'true')
+    if (userId) localStorage.setItem(storageKeyFor(userId), 'true')
     setShouldShow(false)
   }
 

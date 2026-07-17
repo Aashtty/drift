@@ -26,7 +26,11 @@ import { toast } from '@/stores/toastStore'
 import type { Task } from '@/types/task'
 
 const NO_SIDEBAR_ROUTES = ['/now', '/shutdown']
-const PUBLIC_ROUTES = ['/login']
+// '/reset-password' added - a person landing here from an email link
+// has a transient recovery session that AuthProvider hasn't finished
+// resolving yet on first paint, so without this it could briefly
+// redirect to /login before the recovery session is picked up.
+const PUBLIC_ROUTES = ['/login', '/reset-password']
 
 function matchesRoute(pathname: string, route: string): boolean {
   return pathname === route || pathname.startsWith(`${route}/`)

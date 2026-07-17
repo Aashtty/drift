@@ -12,9 +12,6 @@ export function useTaskEngine(userId: string) {
   const addTask = useTaskStore((s) => s.addTask)
   const updateTask = useTaskStore((s) => s.updateTask)
   const setStatus = useTaskStore((s) => s.setStatus)
-  // New — the store already had this, but nothing consuming useTaskEngine
-  // (i.e. every task-facing page) could reach it. Backs task deletion in
-  // the new Task Detail Sheet.
   const removeTask = useTaskStore((s) => s.removeTask)
 
   const anchors = useAnchorStore((s) => s.anchors)
@@ -22,8 +19,9 @@ export function useTaskEngine(userId: string) {
   const syncAnchorsRemote = useAnchorStore((s) => s.syncFromRemote)
 
   useEffect(() => {
-    void loadFromLocal()
-    void loadAnchorsLocal()
+    if (!userId) return
+    void loadFromLocal(userId)
+    void loadAnchorsLocal(userId)
     void syncFromRemote(userId)
     void syncAnchorsRemote(userId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -59,17 +57,5 @@ export function useTaskEngine(userId: string) {
     return task
   }
 
-  return {
-    tasks,
-    anchors,
-    loaded,
-    addTask,
-    updateTask,
-    setStatus,
-    removeTask,
-    anchorFor,
-    tasksByStatus,
-    markComplete,
-    addCompletedTask,
-  }
+  return { tasks, anchors, loaded, addTask, updateTask, setStatus, removeTask, anchorFor, tasksByStatus, markComplete, addCompletedTask }
 }

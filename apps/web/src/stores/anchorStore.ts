@@ -9,7 +9,7 @@ const MAX_ANCHORS = 6
 interface AnchorStoreState {
   anchors: LocalAnchor[]
   loaded: boolean
-  loadFromLocal: () => Promise<void>
+  loadFromLocal: (userId: string) => Promise<void>
   syncFromRemote: (userId: string) => Promise<void>
   addAnchor: (anchor: Anchor) => Promise<{ ok: boolean; reason?: string }>
   updateAnchor: (id: string, patch: Partial<Pick<Anchor, 'name' | 'color'>>) => Promise<void>
@@ -20,8 +20,11 @@ export const useAnchorStore = create<AnchorStoreState>((set, get) => ({
   anchors: [],
   loaded: false,
 
-  loadFromLocal: async () => {
-    const local = await db.anchors.toArray()
+  // Same fix as taskStore.loadFromLocal - scoped to the current user
+  // instead of returning everything cached locally regardless of who's
+  // signed in.
+  loadFromLocal: async (userId) => {
+    const local = await db.anchors.filter((a) => a.user_id === userId).toArray()
     set({ anchors: local, loaded: true })
   },
 
@@ -30,16 +33,16 @@ export const useAnchorStore = create<AnchorStoreState>((set, get) => ({
       if (typeof navigator !== 'undefined' && !navigator.onLine) return
       const remote = await fetchAnchorsRemote(userId)
       await db.anchors.bulkPut(remote.map((a) => ({ ...a, _dirty: false })))
-      const merged = await db.anchors.toArray()
+      const merged = await db.anchors.filter((a) => a.user_id === userId).toArray()
       set({ anchors: merged, loaded: true })
     } catch {
-      // offline — local stands
+      // offline - local stands
     }
   },
 
   addAnchor: async (anchor) => {
     if (get().anchors.length >= MAX_ANCHORS) {
-      return { ok: false, reason: `Max ${MAX_ANCHORS} anchors — ADHD constraint, no exceptions.` }
+      return { ok: false, reason: `Max ${MAX_ANCHORS} anchors - ADHD constraint, no exceptions.` }
     }
     const local: LocalAnchor = { ...anchor, _dirty: true }
     await db.anchors.put(local)
@@ -55,8 +58,6 @@ export const useAnchorStore = create<AnchorStoreState>((set, get) => ({
     return { ok: true }
   },
 
-  // New — anchor color/name could be set once at creation and never
-  // again. Backs the "rename / recolor" affordance in Anchor Manager.
   updateAnchor: async (id, patch) => {
     const existing = get().anchors.find((a) => a.id === id)
     if (!existing) return
@@ -73,12 +74,6 @@ export const useAnchorStore = create<AnchorStoreState>((set, get) => ({
     }
   },
 
-  // New — there was previously no way to delete an anchor at all, in
-  // the store or anywhere in the UI. Local removal is optimistic; if
-  // the remote delete fails (offline), the anchor reappears on the next
-  // successful syncFromRemote, which is an acceptable inconsistency for
-  // a rare, low-stakes action rather than building a full tombstone
-  // system (like tasks have) for anchors too.
   removeAnchor: async (id) => {
     await db.anchors.delete(id)
     set({ anchors: get().anchors.filter((a) => a.id !== id) })

@@ -3,7 +3,6 @@ import Dexie, { type Table } from 'dexie'
 import type { Task } from '@/types/task'
 import type { Anchor } from '@/types/anchor'
 
-// Local-only bookkeeping fields, never sent to Supabase
 export interface LocalTask extends Task {
   _dirty?: boolean
   _deleted?: boolean
@@ -22,6 +21,16 @@ class DriftDB extends Dexie {
     this.version(1).stores({
       tasks: 'id, status, anchor_id, updated_at, _dirty',
       anchors: 'id, _dirty',
+    })
+    // Recommended alongside the cross-account leak fix (see
+    // lib/auth/clearLocalUserData.ts) - adds a real index on user_id so
+    // taskStore/anchorStore's now-scoped loadFromLocal(userId) queries
+    // don't do a full unindexed scan of every locally cached row on
+    // every load. Purely additive - Dexie indexes existing rows on the
+    // new field automatically, no manual data migration needed.
+    this.version(2).stores({
+      tasks: 'id, user_id, status, anchor_id, updated_at, _dirty',
+      anchors: 'id, user_id, _dirty',
     })
   }
 }
