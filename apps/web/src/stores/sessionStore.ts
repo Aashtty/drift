@@ -4,11 +4,18 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { insertSessionRemote } from '@/lib/db/queries'
 import type { SessionEndState } from '@/types/session'
 
-interface ActiveSession {
+export interface ActiveSession {
   taskId: string | null
   startedAt: string
   baseDurationSeconds: number
   hyperfocus: boolean
+  /** Set the instant the session is paused, cleared on resume. This is
+   *  the actual fix for the pause bug: previously ONLY the local
+   *  useElasticTimer hook inside NowSession knew a session was paused -
+   *  this global store (which Dashboard reads for its "session in
+   *  progress" card, and which NowPage reads on recovery) had no idea,
+   *  so it kept counting real wall-clock time regardless. */
+  pausedAt: string | null
 }
 
 interface SessionStoreState {
@@ -16,6 +23,8 @@ interface SessionStoreState {
   lastSummary: { durationSeconds: number; taskId: string | null } | null
   startSession: (taskId: string | null, baseDurationSeconds: number) => void
   setHyperfocus: (on: boolean) => void
+  pauseSession: () => void
+  resumeSession: () => void
   endSession: (
     userId: string,
     elapsedSeconds: number,
@@ -48,16 +57,7 @@ async function insertSessionWithRetry(
   }
 }
 
-// SSR-safe storage: `persist` reads storage as soon as the module loads,
-// which for a 'use client' page can still happen during a server render
-// pass. Referencing window.localStorage unguarded there throws. This
-// no-op fallback makes rehydration a harmless zero-op on the server and
-// the real thing once `window` exists in the browser.
-const noopStorage = {
-  getItem: () => null,
-  setItem: () => {},
-  removeItem: () => {},
-}
+const noopStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
 
 export const useSessionStore = create<SessionStoreState>()(
   persist(
@@ -67,12 +67,7 @@ export const useSessionStore = create<SessionStoreState>()(
 
       startSession: (taskId, baseDurationSeconds) => {
         set({
-          active: {
-            taskId,
-            startedAt: new Date().toISOString(),
-            baseDurationSeconds,
-            hyperfocus: false,
-          },
+          active: { taskId, startedAt: new Date().toISOString(), baseDurationSeconds, hyperfocus: false, pausedAt: null },
         })
       },
 
@@ -82,30 +77,36 @@ export const useSessionStore = create<SessionStoreState>()(
         set({ active: { ...active, hyperfocus: on } })
       },
 
+      pauseSession: () => {
+        const active = get().active
+        if (!active || active.pausedAt) return
+        set({ active: { ...active, pausedAt: new Date().toISOString() } })
+      },
+
+      resumeSession: () => {
+        const active = get().active
+        if (!active || !active.pausedAt) return
+        // Mirrors elasticTimer's shiftStart exactly: shift startedAt
+        // forward by however long the pause actually lasted, so future
+        // elapsed calculations against startedAt correctly exclude it.
+        const pauseDurationMs = Date.now() - new Date(active.pausedAt).getTime()
+        const shiftedStartedAt = new Date(new Date(active.startedAt).getTime() + pauseDurationMs).toISOString()
+        set({ active: { ...active, startedAt: shiftedStartedAt, pausedAt: null } })
+      },
+
       endSession: async (userId, elapsedSeconds, flowDetected, stateAtEnd) => {
         const active = get().active
         if (!active) return
-
         const endedAt = new Date().toISOString()
-
         try {
           await insertSessionWithRetry({
-            userId,
-            taskId: active.taskId,
-            startedAt: active.startedAt,
-            endedAt,
-            durationSeconds: elapsedSeconds,
-            baseDurationSeconds: active.baseDurationSeconds,
-            exceededBase: elapsedSeconds > active.baseDurationSeconds,
-            flowDetected,
-            hyperfocus: active.hyperfocus,
-            stateAtEnd,
+            userId, taskId: active.taskId, startedAt: active.startedAt, endedAt,
+            durationSeconds: elapsedSeconds, baseDurationSeconds: active.baseDurationSeconds,
+            exceededBase: elapsedSeconds > active.baseDurationSeconds, flowDetected,
+            hyperfocus: active.hyperfocus, stateAtEnd,
           })
         } finally {
-          set({
-            active: null,
-            lastSummary: { durationSeconds: elapsedSeconds, taskId: active.taskId },
-          })
+          set({ active: null, lastSummary: { durationSeconds: elapsedSeconds, taskId: active.taskId } })
         }
       },
 
@@ -118,3 +119,13 @@ export const useSessionStore = create<SessionStoreState>()(
     }
   )
 )
+
+/** Pure - used by useLiveSessionElapsed (Dashboard's ticking display)
+ *  and available anywhere else that needs "how long has this session
+ *  really run, excluding paused time." Freezes at pausedAt while
+ *  paused rather than continuing to advance against `nowMs`. */
+export function computeActiveElapsedSeconds(active: ActiveSession, nowMs: number = Date.now()): number {
+  const startedAtMs = new Date(active.startedAt).getTime()
+  const referenceMs = active.pausedAt ? new Date(active.pausedAt).getTime() : nowMs
+  return Math.max(0, Math.floor((referenceMs - startedAtMs) / 1000))
+}

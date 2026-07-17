@@ -4,52 +4,40 @@
 import { useEffect, useState } from 'react'
 import { fuzzyTimeLabel, exactTimeLabel } from '@/lib/utils/fuzzyTime'
 import { useAppState } from '@/hooks/useAppState'
+import { getDayWindow, dayWindowPosition, currentDayProgress } from '@/lib/utils/dayWindow'
 import type { CalendarEvent } from '@/types/calendar'
 
-const STATE_ARC_COLOR: Record<string, string> = {
-  IDLE: 'var(--text-tertiary)',
-  FOCUS: 'var(--accent)',
-  FLOW: 'var(--accent-b)',
-  DRIFT: 'var(--warning)',
-  SHUTDOWN: 'var(--success)',
+const STATE_ARC_STYLE: Record<string, { color: string; opacity: number }> = {
+  IDLE: { color: 'var(--accent)', opacity: 0.55 },
+  FOCUS: { color: 'var(--accent)', opacity: 1 },
+  FLOW: { color: 'var(--accent-b)', opacity: 1 },
+  DRIFT: { color: 'var(--warning)', opacity: 1 },
+  SHUTDOWN: { color: 'var(--success)', opacity: 1 },
 }
 
-function getDayProgress(dayStartHour: number, dayEndHour: number): number {
-  const now = new Date()
-  const minutesNow = now.getHours() * 60 + now.getMinutes()
-  const startMinutes = dayStartHour * 60
-  const endMinutes = dayEndHour * 60
-  const total = endMinutes - startMinutes
-  if (total <= 0) return 0
-  return Math.min(1, Math.max(0, (minutesNow - startMinutes) / total))
-}
+const BAR_WIDTH = 4
+const HIT_WIDTH = 16
+const PROGRESS_REFRESH_MS = 15_000
 
 interface EdgeArcProps {
   fuzzyTime?: boolean
-  dayStartHour?: number
-  dayEndHour?: number
+  dayStart?: string
+  dayEnd?: string
   nearEvent?: CalendarEvent | null
   events?: CalendarEvent[]
 }
 
 /**
- * Fixes a real hydration mismatch: the fill height and the aria-label
- * both depended on `new Date()` / `toLocaleTimeString()`, evaluated once
- * during the server render and again during the client's first render —
- * two different instants. On top of that, Node's ICU data can format
- * "AM"/"PM" with different casing than the browser's ("12:45 AM" vs
- * "12:45 am"), which is exactly what Next's hydration warning caught.
- * Fix: `progress` and `label` both start at time-independent defaults
- * (0 and a static string) on every render until a `mounted` flag flips
- * true inside a useEffect — which only ever runs on the client, after
- * hydration is already done. The real values land a frame later
- * (imperceptible), but strictly after hydration, so React never
- * compares a server-rendered string against a different client one.
+ * Only change from the previous version: progress and tick-position
+ * math now goes through lib/utils/dayWindow.ts instead of doing the
+ * (buggy, non-overnight-only) subtraction locally. See that file's
+ * comment for the actual bug and the fix's reasoning. Nothing else -
+ * layout, hover/click behavior, imminent-event styling - changed.
  */
 export function EdgeArc({
   fuzzyTime = false,
-  dayStartHour = 9,
-  dayEndHour = 19,
+  dayStart = '09:00',
+  dayEnd = '19:00',
   nearEvent = null,
   events = [],
 }: EdgeArcProps) {
@@ -57,41 +45,33 @@ export function EdgeArc({
   const [mounted, setMounted] = useState(false)
   const [progress, setProgress] = useState(0)
   const [hovering, setHovering] = useState(false)
+  const [hoverSide, setHoverSide] = useState<'left' | 'right'>('left')
   const [agendaOpen, setAgendaOpen] = useState(false)
   const [hoverY, setHoverY] = useState(0)
   const [pulseKey, setPulseKey] = useState(0)
 
   useEffect(() => {
     setMounted(true)
-    setProgress(getDayProgress(dayStartHour, dayEndHour))
-    const interval = setInterval(() => setProgress(getDayProgress(dayStartHour, dayEndHour)), 60_000)
+    setProgress(currentDayProgress(dayStart, dayEnd))
+    const interval = setInterval(() => setProgress(currentDayProgress(dayStart, dayEnd)), PROGRESS_REFRESH_MS)
     return () => clearInterval(interval)
-  }, [dayStartHour, dayEndHour])
+  }, [dayStart, dayEnd])
 
   useEffect(() => {
     if (nearEvent) setPulseKey((k) => k + 1)
   }, [nearEvent?.id])
 
-  const color = nearEvent ? 'var(--accent)' : STATE_ARC_COLOR[state] ?? 'var(--text-tertiary)'
+  const style = nearEvent ? { color: 'var(--accent)', opacity: 1 } : STATE_ARC_STYLE[state] ?? { color: 'var(--text-tertiary)', opacity: 0.5 }
   const now = new Date()
-  const label = !mounted
-    ? 'Day progress'
-    : nearEvent
-    ? `${nearEvent.summary} soon`
-    : fuzzyTime
-    ? fuzzyTimeLabel(now)
-    : exactTimeLabel(now)
+  const label = !mounted ? 'Day progress' : nearEvent ? `${nearEvent.summary} soon` : fuzzyTime ? fuzzyTimeLabel(now) : exactTimeLabel(now)
 
+  const window = getDayWindow(dayStart, dayEnd)
   const dayTicks = events
     .map((e) => {
       const d = new Date(e.start)
-      const minutes = d.getHours() * 60 + d.getMinutes()
-      const startMinutes = dayStartHour * 60
-      const endMinutes = dayEndHour * 60
-      const total = endMinutes - startMinutes
-      if (total <= 0) return null
-      const pos = (minutes - startMinutes) / total
-      if (pos < 0 || pos > 1) return null
+      const atMinutes = d.getHours() * 60 + d.getMinutes()
+      const pos = dayWindowPosition(window, atMinutes)
+      if (pos == null) return null
       return { id: e.id, pos, summary: e.summary, start: e.start }
     })
     .filter((t): t is { id: string; pos: number; summary: string; start: string } => t !== null)
@@ -100,86 +80,132 @@ export function EdgeArc({
     .filter((e) => new Date(e.start).toDateString() === now.toDateString() && new Date(e.start).getTime() > Date.now())
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
 
-  return (
-    <div
-      data-testid="edge-arc"
-      role="button"
-      aria-label={`${label}. Click to view today's schedule.`}
-      tabIndex={0}
-      onClick={() => setAgendaOpen((o) => !o)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          setAgendaOpen((o) => !o)
-        }
-      }}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      onMouseMove={(e) => setHoverY(e.clientY)}
-      style={{ position: 'fixed', left: 0, top: 0, width: 10, height: '100vh', zIndex: 'var(--z-arc)' as any, cursor: 'pointer', paddingRight: 8 }}
-    >
-      <div style={{ position: 'absolute', left: 0, top: 0, width: 3, height: '100%', background: 'rgba(255,255,255,0.04)' }}>
-        <div
-          key={pulseKey}
-          style={{
-            position: 'absolute', top: 0, left: 0, width: 3,
-            height: `${progress * 100}%`, background: color,
-            boxShadow: `0 0 8px -1px ${color}`,
-            transition: 'height 800ms var(--ease-focus), background 800ms var(--ease-focus)',
-            animation: nearEvent ? 'edge-arc-event-pulse 1s var(--ease-spring) 3' : 'none',
-          }}
-        />
+  const nextTickId = remainingToday[0]?.id ?? null
 
-        {mounted && (
+  function openAgenda(side: 'left' | 'right') {
+    setHoverSide(side)
+    setAgendaOpen((prev) => !prev)
+  }
+
+  function renderEdge(side: 'left' | 'right') {
+    const sideAnchor: React.CSSProperties = side === 'left' ? { left: 0 } : { right: 0 }
+    const dotAnchor: React.CSSProperties = side === 'left' ? { left: -2.5 } : { right: -2.5 }
+
+    return (
+      <div
+        data-testid={side === 'left' ? 'edge-arc' : 'edge-arc-right'}
+        role="button"
+        aria-label={`${label}. Click to view today's schedule.`}
+        tabIndex={0}
+        onClick={() => openAgenda(side)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            openAgenda(side)
+          }
+        }}
+        onMouseEnter={() => {
+          setHovering(true)
+          setHoverSide(side)
+        }}
+        onMouseLeave={() => setHovering(false)}
+        onMouseMove={(e) => setHoverY(e.clientY)}
+        style={{ position: 'fixed', top: 0, width: HIT_WIDTH, height: '100vh', zIndex: 'var(--z-arc)' as any, cursor: 'pointer', ...sideAnchor }}
+      >
+        <div style={{ position: 'absolute', top: 0, width: BAR_WIDTH, height: '100%', background: 'rgba(255,255,255,0.09)', ...sideAnchor }}>
           <div
-            aria-hidden="true"
+            key={`${side}-fill-${pulseKey}`}
             style={{
               position: 'absolute',
-              left: -2.5,
-              top: `${progress * 100}%`,
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: color,
-              transform: 'translateY(-50%)',
-              boxShadow: `0 0 10px 2px ${color}`,
-              animation: 'pulse-soft 2.4s var(--ease-focus) infinite',
+              top: 0,
+              width: BAR_WIDTH,
+              height: `${progress * 100}%`,
+              background: style.color,
+              opacity: style.opacity,
+              boxShadow: `0 0 12px -1px ${style.color}`,
+              transition: 'height 800ms var(--ease-focus), background 800ms var(--ease-focus), opacity 500ms var(--ease-focus)',
+              animation: nearEvent ? 'edge-arc-event-pulse 1s var(--ease-spring) 3' : 'none',
+              ...sideAnchor,
             }}
           />
-        )}
 
-        {dayTicks.map((t) => (
-          <div
-            key={t.id}
-            data-testid="edge-arc-tick"
-            title={t.summary}
-            style={{
-              position: 'absolute',
-              left: -1.5,
-              top: `${t.pos * 100}%`,
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: 'var(--text-primary)',
-              opacity: 0.9,
-              boxShadow: '0 0 6px 1px rgba(255,255,255,0.55)',
-              transform: 'translateY(-3px)',
-              pointerEvents: 'none',
-            }}
-          />
-        ))}
+          {mounted && (
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                top: `${progress * 100}%`,
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                background: style.color,
+                opacity: nearEvent ? 1 : Math.max(0.6, style.opacity),
+                transform: 'translateY(-50%)',
+                boxShadow: `0 0 12px 2px ${style.color}`,
+                animation: 'pulse-soft 2.4s var(--ease-focus) infinite',
+                ...dotAnchor,
+              }}
+            />
+          )}
+
+          {dayTicks.map((t) => {
+            const isNext = t.id === nextTickId
+            return (
+              <div
+                key={`${side}-${t.id}`}
+                data-testid="edge-arc-tick"
+                data-side={side}
+                title={`${t.summary} - ${new Date(t.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
+                style={{
+                  position: 'absolute',
+                  top: `${t.pos * 100}%`,
+                  width: isNext ? 9 : 7,
+                  height: isNext ? 9 : 7,
+                  borderRadius: '50%',
+                  background: isNext ? 'var(--accent)' : 'var(--text-primary)',
+                  opacity: isNext ? 1 : 0.9,
+                  boxShadow: isNext ? '0 0 10px 3px var(--accent)' : '0 0 6px 1px rgba(255,255,255,0.55)',
+                  transform: 'translateY(-4px)',
+                  pointerEvents: 'none',
+                  ...dotAnchor,
+                }}
+              />
+            )
+          })}
+        </div>
       </div>
+    )
+  }
+
+  return (
+    <>
+      {renderEdge('left')}
+      {renderEdge('right')}
 
       <style>{`
         @keyframes edge-arc-event-pulse {
           0% { box-shadow: 0 0 0 0 var(--accent); }
-          50% { box-shadow: 3px 0 10px 2px var(--accent); }
+          50% { box-shadow: 4px 0 14px 3px var(--accent); }
           100% { box-shadow: 0 0 0 0 transparent; }
         }
       `}</style>
 
       {hovering && !agendaOpen && mounted && (
-        <div data-testid="edge-arc-tooltip" className="glass" style={{ position: 'fixed', left: 16, top: hoverY - 12, padding: '4px 10px', fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+        <div
+          data-testid="edge-arc-tooltip"
+          className="glass"
+          style={{
+            position: 'fixed',
+            top: hoverY - 12,
+            padding: '4px 10px',
+            fontSize: 12,
+            color: 'var(--text-primary)',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 'var(--z-popover)' as any,
+            ...(hoverSide === 'left' ? { left: HIT_WIDTH + 6 } : { right: HIT_WIDTH + 6 }),
+          }}
+        >
           {label}
         </div>
       )}
@@ -189,9 +215,26 @@ export function EdgeArc({
           data-testid="edge-arc-agenda"
           className="glass-chromatic"
           onClick={(e) => e.stopPropagation()}
-          style={{ position: 'fixed', left: 16, top: 40, padding: 16, width: 240, zIndex: 'var(--z-popover)' as any }}
+          style={{
+            position: 'fixed',
+            top: 40,
+            padding: 16,
+            width: 240,
+            zIndex: 'var(--z-popover)' as any,
+            ...(hoverSide === 'left' ? { left: HIT_WIDTH + 6 } : { right: HIT_WIDTH + 6 }),
+          }}
         >
-          <p className="text-section-label" style={{ marginBottom: 10 }}>TODAY</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <p className="text-section-label" style={{ margin: 0 }}>TODAY</p>
+            <button
+              type="button"
+              onClick={() => setAgendaOpen(false)}
+              aria-label="close"
+              style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: 6, color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}
+            >
+              x
+            </button>
+          </div>
           {remainingToday.length === 0 ? (
             <p className="text-meta" style={{ fontSize: 12 }}>Nothing left on the calendar today.</p>
           ) : (
@@ -206,6 +249,6 @@ export function EdgeArc({
           )}
         </div>
       )}
-    </div>
+    </>
   )
 }

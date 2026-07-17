@@ -5,6 +5,7 @@ import type { Anchor } from '@/types/anchor'
 import type { FocusSession, SessionEndState } from '@/types/session'
 import type { UserSettings } from '@/types/settings'
 import type { ManualEvent } from '@/types/calendar'
+import type { Routine } from '@/types/routine'
 
 export async function fetchTasksRemote(userId: string): Promise<Task[]> {
   const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).order('created_at', { ascending: false })
@@ -68,9 +69,6 @@ interface InsertShutdownArgs {
   userId: string
   completedTaskIds: string[]
   carriedTaskIds: string[]
-  /** Renamed from `anchorTaskId` — this is the task chosen as tomorrow's
-   *  single priority during the Shutdown Ritual, unrelated to the
-   *  Anchor tagging system. See migration 004. */
   priorityTaskId: string | null
   notes: string | null
 }
@@ -89,7 +87,6 @@ export interface ShutdownRecord {
   completed_at: string
   completed_task_ids: string[]
   carried_task_ids: string[]
-  /** Renamed from `anchor_task_id` — see migration 004. */
   priority_task_id: string | null
   notes: string | null
 }
@@ -140,5 +137,23 @@ export async function insertEventRemote(userId: string, title: string, startTime
 
 export async function deleteEventRemote(id: string): Promise<void> {
   const { error } = await supabase.from('events').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ---- Routines ----
+
+export async function fetchRoutinesRemote(userId: string): Promise<Routine[]> {
+  const { data, error } = await supabase.from('routines').select('*').eq('user_id', userId).order('created_at', { ascending: true })
+  if (error) throw error
+  return data as Routine[]
+}
+
+export async function upsertRoutineRemote(routine: Routine): Promise<void> {
+  const { error } = await supabase.from('routines').upsert(routine)
+  if (error) throw error
+}
+
+export async function deleteRoutineRemote(id: string): Promise<void> {
+  const { error } = await supabase.from('routines').delete().eq('id', id)
   if (error) throw error
 }

@@ -12,5 +12,9 @@ export interface UserSettings {
   sound_volume: number
   fuzzy_time: boolean
   distraction_sites: string[]
+  ambient_transition_seconds: number
+  /** New - how many days of inactivity before a task quietly moves to
+   *  Limbo. Previously hardcoded to 7 everywhere. */
+  limbo_decay_days: number
   updated_at: string
 }

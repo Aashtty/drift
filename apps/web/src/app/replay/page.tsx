@@ -16,6 +16,7 @@ import {
   hyperfocusStats,
   anchorTimeBreakdown,
   periodHighlights,
+  summarizeDay,
 } from '@/lib/analytics/sessionAnalytics'
 import { generateInsight } from '@/lib/analytics/insights'
 import { HeatmapGrid } from '@/components/replay/HeatmapGrid'
@@ -40,24 +41,68 @@ const RANGE_OPTIONS: { value: RangeDays; label: string }[] = [
   { value: 90, label: '90d' },
 ]
 
-function StatCard({
-  label,
-  value,
-  sub,
-  deltaPercent,
-}: {
-  label: string
-  value: string
-  sub?: string
-  deltaPercent?: number | null
-}) {
+function CalendarDayIcon() {
   return (
-    <div className="glass" style={{ padding: '16px 18px', flex: 1, minWidth: 150 }}>
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M2 6.5h12" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="8" cy="10.2" r="1.2" fill="currentColor" />
+    </svg>
+  )
+}
+function TargetIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="8" r="0.9" fill="currentColor" />
+    </svg>
+  )
+}
+function ListIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M5.5 4h8M5.5 8h8M5.5 12h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="2.7" cy="4" r="0.9" fill="currentColor" />
+      <circle cx="2.7" cy="8" r="0.9" fill="currentColor" />
+      <circle cx="2.7" cy="12" r="0.9" fill="currentColor" />
+    </svg>
+  )
+}
+function TagIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M2 2h5.5L14 8.5L8.5 14L2 7.5V2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <circle cx="4.7" cy="4.7" r="1" fill="currentColor" />
+    </svg>
+  )
+}
+function BookIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M2.5 3.5h5A1.5 1.5 0 0 1 9 5v8.5H4A1.5 1.5 0 0 1 2.5 12V3.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M13.5 3.5h-5A1.5 1.5 0 0 0 7 5v8.5h5A1.5 1.5 0 0 0 13.5 12V3.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function TrendIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M2 12L6 7L9 9.5L14 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10.5 4H14V7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function StatCard({ label, value, sub, deltaPercent }: { label: string; value: string; sub?: string; deltaPercent?: number | null }) {
+  return (
+    <div className="glass" style={{ padding: '16px 18px', flex: 1, minWidth: 150, borderTop: '2px solid var(--border-accent)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
         <p className="text-section-label" style={{ fontSize: 10.5, letterSpacing: '0.06em', margin: 0 }}>{label}</p>
         {deltaPercent !== undefined && (
           <span className="text-micro-mono" style={{ color: deltaPercent === null ? 'var(--text-tertiary)' : deltaPercent >= 0 ? 'var(--success)' : 'var(--danger)', flexShrink: 0 }}>
-            {deltaPercent === null ? '—' : `${deltaPercent >= 0 ? '+' : ''}${deltaPercent}%`}
+            {deltaPercent === null ? '-' : `${deltaPercent >= 0 ? '+' : ''}${deltaPercent}%`}
           </span>
         )}
       </div>
@@ -67,9 +112,10 @@ function StatCard({
   )
 }
 
-function SectionHeader({ label, action }: { label: string; action?: React.ReactNode }) {
+function SectionHeader({ label, icon, action }: { label: string; icon?: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+      {icon && <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>}
       <p className="text-section-label" style={{ letterSpacing: '0.08em' }}>{label}</p>
       <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
       {action}
@@ -77,35 +123,21 @@ function SectionHeader({ label, action }: { label: string; action?: React.ReactN
   )
 }
 
-function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
+function RailCard({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="glass" style={{ padding: 20 }}>
-      <p className="text-section-label" style={{ marginBottom: 14 }}>{title}</p>
+    <div className="glass" style={{ padding: 20, borderTop: '2px solid var(--border-accent)' }}>
+      <p className="text-section-label" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
+        {icon && <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>}
+        {title}
+      </p>
       {children}
     </div>
   )
 }
 
-const TREND_ARROW: Record<'up' | 'down' | 'flat', string> = { up: '↑', down: '↓', flat: '→' }
+const TREND_LABEL: Record<'up' | 'down' | 'flat', string> = { up: '^', down: 'v', flat: '-' }
 const TREND_COLOR: Record<'up' | 'down' | 'flat', string> = { up: 'var(--success)', down: 'var(--danger)', flat: 'var(--text-secondary)' }
 
-/**
- * Complete rebuild. Previous version: fixed 920px column, no way to
- * look at anything but a hardcoded last-7-days / last-4-weeks window,
- * and three real widgets' worth of already-collected data (hyperfocus,
- * anchor time, shutdown reflections) sitting unused in the database.
- *
- * New structure: full-width grid (matches Dashboard/Tasks). The
- * "this week" stat cards, trend line, and weekday chart stay on their
- * original fixed windows deliberately — changing what "focused this
- * week" or the week-over-week comparison means based on an unrelated
- * range picker would make those numbers lie. The date-range selector
- * instead governs the exploratory widgets (top tasks, anchor
- * breakdown, period highlights, hyperfocus stats, and the default
- * recent-sessions view) where "look further back" is exactly the
- * point. Clicking a weekday bar still filters against the fixed
- * 28-day set the chart itself summarizes, same reasoning as before.
- */
 export default function ReplayPage() {
   const { user } = useUser()
   const tasks = useTaskStore((s) => s.tasks)
@@ -149,9 +181,11 @@ export default function ReplayPage() {
   const weekdays = weekdayTotals(monthSessions)
   const activeDays = activeDaysInWindow(recentSessions, 7)
   const comparison = compareWeekWindows(monthSessions)
-  const topTasks = topTasksByFocusTime(rangeSessions, 5)
+  const topTasks = topTasksByFocusTime(rangeSessions, 20)
   const hyperfocus = hyperfocusStats(rangeSessions)
   const highlights = periodHighlights(rangeSessions)
+  const todaySummary = summarizeDay(recentSessions)
+  const todaySessions = recentSessions.filter((s) => new Date(s.started_at).toDateString() === new Date().toDateString())
 
   const taskNameById = new Map(tasks.map((t) => [t.id, t.name]))
   const anchorForTask = (taskId: string) => {
@@ -179,7 +213,7 @@ export default function ReplayPage() {
   return (
     <main style={{ padding: 56, maxWidth: 1360, margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: 40, alignItems: 'start' }}>
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
           <div>
             <motion.p
               initial={{ opacity: 0, y: 8 }}
@@ -194,10 +228,32 @@ export default function ReplayPage() {
               {hasAnyData ? 'a look at how and when you actually work' : 'complete a few sessions and your patterns will show up here'}
             </p>
           </div>
+
+          {hasAnyData && (
+            <div className="glass" style={{ display: 'flex', padding: 4, borderRadius: 'var(--radius-full)', border: '1px solid var(--border)' }} data-testid="replay-range-selector">
+              {RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  data-testid={`range-${opt.value}`}
+                  onClick={() => setRange(opt.value)}
+                  style={{
+                    padding: '7px 16px', borderRadius: 'var(--radius-full)', border: 'none',
+                    background: range === opt.value ? 'var(--surface-active)' : 'transparent',
+                    color: range === opt.value ? 'var(--accent)' : 'var(--text-tertiary)',
+                    fontSize: 12.5, fontWeight: range === opt.value ? 500 : 400, cursor: 'pointer',
+                    boxShadow: range === opt.value ? 'var(--glow-accent-sm)' : 'none',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {loaded && !hasAnyData && (
-          <div className="glass" style={{ padding: 32, textAlign: 'center', marginTop: 20 }}>
+          <div className="glass" style={{ padding: 32, textAlign: 'center' }}>
             <p className="text-meta">
               No sessions in the last 4 weeks yet. Once you run a few focus sessions, Replay fills in with your peak hours, flow rate, and patterns.
             </p>
@@ -206,96 +262,93 @@ export default function ReplayPage() {
 
         {hasAnyData && (
           <>
+            <SectionHeader label="TODAY" icon={<CalendarDayIcon />} />
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 24 }}>
+              <StatCard label="FOCUSED TODAY" value={`${todaySummary.totalMinutes}m`} />
+              <StatCard label="SESSIONS TODAY" value={String(todaySummary.sessionCount)} />
+              <StatCard label="FLOW RATE TODAY" value={`${todaySummary.flowRate}%`} />
+              <StatCard label="HYPERFOCUS TODAY" value={todaySummary.hyperfocusMinutes > 0 ? `${todaySummary.hyperfocusMinutes}m` : '-'} />
+            </div>
+            {todaySessions.length > 0 && (
+              <div style={{ marginBottom: 32 }}>
+                <RecentSessionsList sessions={todaySessions} taskNameById={taskNameById} anchorForTask={anchorForTask} defaultLimit={5} />
+              </div>
+            )}
+
             {insight && (
-              <div style={{ marginTop: 20, marginBottom: 24 }}>
+              <div style={{ marginBottom: 24 }}>
                 <InsightBanner text={insight} />
               </div>
             )}
 
+            <SectionHeader label="LAST 7 DAYS" icon={<TrendIcon />} />
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 32 }}>
               <StatCard
-                label="FOCUSED — LAST 7D"
+                label="FOCUSED"
                 value={`${Math.floor(summary.totalFocusedMinutes / 60)}h ${summary.totalFocusedMinutes % 60}m`}
                 sub={comparison.previousMinutes > 0 ? `${comparison.previousMinutes}m the week before` : undefined}
                 deltaPercent={comparison.deltaPercent}
               />
-              <StatCard label="SESSIONS — LAST 7D" value={String(summary.sessionCount)} sub={summary.sessionCount > 0 ? `avg ${summary.avgSessionMinutes}m each` : undefined} />
+              <StatCard label="SESSIONS" value={String(summary.sessionCount)} sub={summary.sessionCount > 0 ? `avg ${summary.avgSessionMinutes}m each` : undefined} />
               <StatCard label="FLOW RATE" value={`${summary.flowRate}%`} sub="sessions that reached flow" />
               <StatCard label="ACTIVE DAYS" value={`${activeDays}/7`} sub="days with a session this week" />
-              <StatCard label="HYPERFOCUS" value={hyperfocus.count > 0 ? `${hyperfocus.totalMinutes}m` : '—'} sub={hyperfocus.count > 0 ? `across ${hyperfocus.count} lock-ins · last ${rangeLabel}` : `no lock-ins in the last ${rangeLabel}`} />
+              <StatCard label="HYPERFOCUS" value={hyperfocus.count > 0 ? `${hyperfocus.totalMinutes}m` : '-'} sub={hyperfocus.count > 0 ? `across ${hyperfocus.count} lock-ins - last ${rangeLabel}` : `no lock-ins in the last ${rangeLabel}`} />
             </div>
 
-            <SectionHeader label="FOCUS HEATMAP — last 7 days" />
+            <SectionHeader label="FOCUS HEATMAP - last 7 days" />
             <div style={{ marginBottom: 32 }}>
               <HeatmapGrid cells={cells} peakHours={peak} />
             </div>
 
             <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap', marginBottom: 32 }}>
               <div>
-                <SectionHeader label="SESSION TREND — avg length, last 4 weeks" />
+                <SectionHeader label="SESSION TREND - avg length, last 4 weeks" />
                 <SessionTrendLine weeks={weeks} />
               </div>
               <div>
-                <SectionHeader label="BY WEEKDAY — click a day to filter below" />
+                <SectionHeader label="BY WEEKDAY - click a day to filter below" />
                 <WeekdayBar data={weekdays} selectedWeekday={selectedWeekday} onSelect={setSelectedWeekday} />
               </div>
             </div>
 
             <SectionHeader
-              label={selectedWeekday === null ? `SESSIONS — last ${rangeLabel}` : `SESSIONS — ${WEEKDAY_FULL[selectedWeekday]}S, last 4 weeks`}
+              label={selectedWeekday === null ? `SESSIONS - last ${rangeLabel}` : `SESSIONS - ${WEEKDAY_FULL[selectedWeekday]}S, last 4 weeks`}
+              icon={<ListIcon />}
               action={
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  {selectedWeekday !== null && (
-                    <button type="button" onClick={() => setSelectedWeekday(null)} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 11.5, cursor: 'pointer', marginRight: 8 }}>
-                      clear filter
-                    </button>
-                  )}
-                  {selectedWeekday === null &&
-                    RANGE_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        data-testid={`range-${opt.value}`}
-                        onClick={() => setRange(opt.value)}
-                        style={{
-                          padding: '4px 10px', borderRadius: 'var(--radius-full)', border: 'none',
-                          background: range === opt.value ? 'var(--surface-active)' : 'transparent',
-                          color: range === opt.value ? 'var(--accent)' : 'var(--text-tertiary)', fontSize: 11, cursor: 'pointer',
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                </div>
+                selectedWeekday !== null ? (
+                  <button type="button" onClick={() => setSelectedWeekday(null)} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 11.5, cursor: 'pointer' }}>
+                    clear filter
+                  </button>
+                ) : undefined
               }
             />
-            <RecentSessionsList sessions={displayedSessions} taskNameById={taskNameById} anchorForTask={anchorForTask} limit={10} />
+            <RecentSessionsList sessions={displayedSessions} taskNameById={taskNameById} anchorForTask={anchorForTask} defaultLimit={10} />
           </>
         )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <RailCard title="MOMENTUM">
+        <RailCard title="MOMENTUM" icon={<TrendIcon />}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 600, color: 'var(--text-primary)' }}>{momentumScore}</span>
-            <span style={{ fontSize: 15, color: TREND_COLOR[momentumTrend] }}>{TREND_ARROW[momentumTrend]}</span>
+            <span style={{ fontSize: 15, color: TREND_COLOR[momentumTrend] }}>{TREND_LABEL[momentumTrend]}</span>
           </div>
           <p className="text-meta" style={{ fontSize: 11.5, lineHeight: 1.6 }}>
-            Weighted across the last 14 days — the most recent 3 days count 3×, the last week counts 2×, and everything back to 14 days counts once. One quiet day never resets it.
+            Weighted across the last 14 days - the most recent 3 days count 3x, the last week counts 2x, and everything back to 14 days counts once. One quiet day never resets it.
           </p>
         </RailCard>
 
         {highlights.longestSessionMinutes > 0 && (
-          <RailCard title={`HIGHLIGHTS — last ${rangeLabel}`}>
+          <RailCard title={`HIGHLIGHTS - last ${rangeLabel}`} icon={<TargetIcon />}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <p style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{highlights.longestSessionMinutes}m</p>
-                <p className="text-micro-mono" style={{ marginTop: 2 }}>longest session{highlightTaskName ? ` · ${highlightTaskName}` : ''}</p>
+                <p className="text-micro-mono" style={{ marginTop: 2 }}>longest session{highlightTaskName ? ` - ${highlightTaskName}` : ''}</p>
               </div>
               {highlights.bestDay && (
                 <div>
                   <p style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{highlights.bestDay.totalMinutes}m</p>
-                  <p className="text-micro-mono" style={{ marginTop: 2 }}>best day · {new Date(highlights.bestDay.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</p>
+                  <p className="text-micro-mono" style={{ marginTop: 2 }}>best day - {new Date(highlights.bestDay.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</p>
                 </div>
               )}
               <div>
@@ -306,17 +359,17 @@ export default function ReplayPage() {
           </RailCard>
         )}
 
-        <RailCard title={`TOP TASKS — last ${rangeLabel}`}>
-          <TopTasksList topTasks={topTasks} taskNameById={taskNameById} anchorForTask={anchorForTask} />
+        <RailCard title={`TOP TASKS - last ${rangeLabel}`} icon={<ListIcon />}>
+          <TopTasksList topTasks={topTasks} taskNameById={taskNameById} anchorForTask={anchorForTask} defaultLimit={5} />
         </RailCard>
 
         {anchors.length > 0 && (
-          <RailCard title={`BY ANCHOR — last ${rangeLabel}`}>
+          <RailCard title={`BY ANCHOR - last ${rangeLabel}`} icon={<TagIcon />}>
             <AnchorBreakdown breakdown={anchorBreakdown} anchors={anchors} />
           </RailCard>
         )}
 
-        <RailCard title="SHUTDOWN LOG">
+        <RailCard title="SHUTDOWN LOG" icon={<BookIcon />}>
           <ShutdownReflection shutdowns={shutdowns} taskNameById={taskNameById} />
         </RailCard>
       </div>

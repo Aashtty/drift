@@ -12,15 +12,21 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { useTaskStore } from '@/stores/taskStore'
 import { useUser } from '@/hooks/useUser'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useAudioStore } from '@/stores/audioStore'
+import { useCalendarBridge } from '@/hooks/useCalendarBridge'
 import { fetchSessionsRemote } from '@/lib/db/queries'
 import { toast } from '@/stores/toastStore'
 
 const MIN_SESSION_MINUTES = 5
+const EVENT_NOTIFY_MINUTES = 15
+const EVENT_CHECK_INTERVAL_MS = 10_000
+const TASK_HISTORY_LOOKBACK_DAYS = 3650
 
 interface SessionSeed {
   startedAtMs: number
   baseDurationSeconds: number
   recovered: boolean
+  pausedAtMs: number | null
 }
 
 export default function NowPage() {
@@ -47,20 +53,23 @@ export default function NowPage() {
 
     if (isRecoverable && existing) {
       const startedAtMs = new Date(existing.startedAt).getTime()
-      const recoveredMinutes = Math.floor((Date.now() - startedAtMs) / 60000)
-      setSeed({ startedAtMs, baseDurationSeconds: existing.baseDurationSeconds, recovered: true })
+      const pausedAtMs = existing.pausedAt ? new Date(existing.pausedAt).getTime() : null
+      const recoveredMinutes = Math.floor(((pausedAtMs ?? Date.now()) - startedAtMs) / 60000)
+      setSeed({ startedAtMs, baseDurationSeconds: existing.baseDurationSeconds, recovered: true, pausedAtMs })
       toast.info(
-        recoveredMinutes > 0
-          ? `Welcome back — resumed your session from ${recoveredMinutes}m ago.`
-          : 'Welcome back — resumed your session.'
+        pausedAtMs != null
+          ? `Welcome back - this session is still paused at ${recoveredMinutes}m.`
+          : recoveredMinutes > 0
+          ? `Welcome back - resumed your session from ${recoveredMinutes}m ago.`
+          : 'Welcome back - resumed your session.'
       )
     } else {
       if (existing) {
-        toast.info("Starting a new session — your last one wasn't wrapped up, so its time may be short.")
+        toast.info("Starting a new session - your last one wasn't wrapped up, so its time may be short.")
       }
       const baseDurationSeconds = Math.max(MIN_SESSION_MINUTES, settings.base_session_minutes) * 60
       startSession(taskId, baseDurationSeconds)
-      setSeed({ startedAtMs: Date.now(), baseDurationSeconds, recovered: false })
+      setSeed({ startedAtMs: Date.now(), baseDurationSeconds, recovered: false, pausedAtMs: null })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings])
@@ -78,16 +87,26 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
   const { state, transition } = useAppState()
   const endSession = useSessionStore((s) => s.endSession)
   const setHyperfocus = useSessionStore((s) => s.setHyperfocus)
+  const { events } = useCalendarBridge(user?.id ?? null)
+  const settings = useSettingsStore((s) => s.settings)
+  const audioMode = useAudioStore((s) => s.mode)
+  const lastNonOffMode = useAudioStore((s) => s.lastNonOffMode)
+  const manuallyMuted = useAudioStore((s) => s.manuallyMuted)
+  const setAudioMode = useAudioStore((s) => s.setMode)
 
   const anchorName = params.get('anchor')
   const [displayName, setDisplayName] = useState(params.get('task') ?? 'Untitled task')
   const [locked, setLocked] = useState(false)
   const [ending, setEnding] = useState(false)
   const [todayFocusedSeconds, setTodayFocusedSeconds] = useState<number | null>(null)
+  const [taskHistory, setTaskHistory] = useState<{ sessionCount: number; totalMinutes: number } | null>(null)
+  const notifiedEventIdRef = useRef<string | null>(null)
+  const autoSoundTriedRef = useRef(false)
 
   const { elapsedSeconds, phase, justPulsed, paused, pause, resume } = useElasticTimer({
     baseDurationSeconds: seed.baseDurationSeconds,
     startedAtMs: seed.startedAtMs,
+    initialPausedAtMs: seed.pausedAtMs,
   })
 
   useEffect(() => {
@@ -98,6 +117,28 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
   useEffect(() => {
     if (phase === 'FLOW' && state === 'FOCUS') transition('FLOW')
   }, [phase, state, transition])
+
+  // Real bug fix: only auto-resume if the person never explicitly
+  // muted. Previously this only checked lastNonOffMode, so turning
+  // sound off yourself and leaving would get silently reversed the
+  // very next time you started a task - lastNonOffMode never got
+  // cleared just because you turned sound off, since that was
+  // deliberately kept so a NEW session could resume it. The missing
+  // piece was distinguishing "explicitly off" from "was never on" -
+  // see audioStore.ts's manuallyMuted.
+  useEffect(() => {
+    if (autoSoundTriedRef.current) return
+    autoSoundTriedRef.current = true
+    if (settings?.sound_enabled && audioMode === 'off' && lastNonOffMode !== 'off' && !manuallyMuted) {
+      void setAudioMode(lastNonOffMode).catch(() => {})
+    }
+  }, [settings, audioMode, lastNonOffMode, manuallyMuted, setAudioMode])
+
+  useEffect(() => {
+    return () => {
+      void useAudioStore.getState().hardStop()
+    }
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -118,6 +159,39 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
   }, [user])
 
   useEffect(() => {
+    if (!user || !taskId) return
+    let cancelled = false
+    fetchSessionsRemote(user.id, TASK_HISTORY_LOOKBACK_DAYS)
+      .then((sessions) => {
+        if (cancelled) return
+        const relevant = sessions.filter((s) => s.task_id === taskId)
+        const totalSeconds = relevant.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0)
+        setTaskHistory({ sessionCount: relevant.length, totalMinutes: Math.round(totalSeconds / 60) })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [user, taskId])
+
+  const upcoming = events
+    .filter((e) => new Date(e.start).getTime() > Date.now())
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+  const nextEvent = upcoming[0] ?? null
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!nextEvent) return
+      const mins = Math.round((new Date(nextEvent.start).getTime() - Date.now()) / 60000)
+      if (mins <= EVENT_NOTIFY_MINUTES && mins >= 0 && notifiedEventIdRef.current !== nextEvent.id) {
+        notifiedEventIdRef.current = nextEvent.id
+        toast.info(`"${nextEvent.summary}" starts ${mins <= 0 ? 'now' : `in ${mins}m`}.`)
+      }
+    }, EVENT_CHECK_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [nextEvent])
+
+  useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {
       if (locked) return
       e.preventDefault()
@@ -133,9 +207,18 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
     setHyperfocus(true)
   }
 
+  // The actual fix for "pause shows in NowBar but keeps running
+  // elsewhere": both the local display timer AND the global session
+  // store now get told about every pause/resume, in that order, so
+  // Dashboard and a later recovery both see the truth.
   function handleTogglePause() {
-    if (paused) resume()
-    else pause()
+    if (paused) {
+      useSessionStore.getState().resumeSession()
+      resume()
+    } else {
+      useSessionStore.getState().pauseSession()
+      pause()
+    }
   }
 
   function handleRename(newName: string) {
@@ -143,15 +226,6 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
     if (taskId) void updateTask(taskId, { name: newName })
   }
 
-  // `restingState` is the real fix for the color-bleed bug: ending a
-  // session used to always call transition('DRIFT') regardless of
-  // where you were headed next. That was fine on the way to
-  // drift-summary (which itself resets to IDLE when you hit Continue),
-  // but "End session" routes straight back to '/' with no such reset —
-  // so the whole app stayed tinted DRIFT's color (amber) indefinitely,
-  // which is exactly what showed up as an unexpectedly orange Tasks
-  // page. Dashboard/Tasks now also force IDLE defensively on mount, so
-  // this is fixed twice over — at the source and as a safety net.
   async function endAndRoute(path: string, restingState: 'IDLE' | 'DRIFT') {
     if (!user || ending) return
     setEnding(true)
@@ -160,10 +234,21 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
       await endSession(user.id, elapsedSeconds, phase === 'FLOW', stateAtEnd)
     } catch (err: any) {
       console.error('Session failed to save:', err?.message ?? err)
-      toast.error("Couldn't save this session — your focus time this round wasn't recorded.")
+      toast.error("Couldn't save this session - your focus time this round wasn't recorded.")
     }
     transition(restingState)
     router.push(path)
+  }
+
+  async function handleMarkDone() {
+    if (taskId) {
+      await updateTask(taskId, { status: 'done', completed_at: new Date().toISOString() })
+    }
+    await endAndRoute('/drift-summary', 'DRIFT')
+  }
+
+  function handleBackToDashboard() {
+    router.push('/')
   }
 
   if (locked) {
@@ -192,8 +277,11 @@ function NowSession({ seed, taskId }: { seed: SessionSeed; taskId: string | null
         paused={paused}
         ending={ending}
         todayFocusedSeconds={todayFocusedSeconds != null ? todayFocusedSeconds + elapsedSeconds : null}
-        onDone={() => void endAndRoute('/drift-summary', 'DRIFT')}
+        nextEvent={nextEvent}
+        taskHistory={taskHistory}
+        onDone={() => void handleMarkDone()}
         onEnd={() => void endAndRoute('/', 'IDLE')}
+        onBackToDashboard={handleBackToDashboard}
         onLockIn={handleLockIn}
         onTogglePause={handleTogglePause}
         onRename={taskId ? handleRename : undefined}

@@ -4,18 +4,12 @@
 import { useEffect, useRef } from 'react'
 import { reconcileParticles, stepParticle, lerpColor, type Particle } from '@/lib/particles/particleSystem'
 import { useAppState } from '@/hooks/useAppState'
+import { useTransitionStore } from '@/stores/transitionStore'
 import { STATE_COLORS } from '@/lib/utils/stateColors'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 
-const COLOR_TRANSITION_MS = 800
-const SPRITE_SIZE = 64 // pre-rendered glow sprite dimensions (px)
+const SPRITE_SIZE = 64
 
-// Builds a soft radial-gradient "glow dot" once, as an offscreen canvas.
-// Drawing this via drawImage() per particle is dramatically cheaper than
-// setting ctx.shadowBlur per particle per frame — shadowBlur forces the
-// browser to do a real-time blur pass on every draw call, which was the
-// actual source of the lag. This sprite approach gets the same soft
-// look essentially for free.
 function buildGlowSprite(color: string): HTMLCanvasElement {
   const sprite = document.createElement('canvas')
   sprite.width = SPRITE_SIZE
@@ -33,6 +27,14 @@ function buildGlowSprite(color: string): HTMLCanvasElement {
   return sprite
 }
 
+/**
+ * Color crossfade duration was a hardcoded 800ms constant — now reads
+ * from transitionStore (driven by Settings' Ambient Transition Speed
+ * slider), the same source every other ambient system reads from. Kept
+ * as a ref with a manual subscription rather than a React value, since
+ * this is consumed inside a requestAnimationFrame loop and shouldn't
+ * trigger a React re-render on every settings change.
+ */
 export function ParticleCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const particlesRef = useRef<Particle[]>([])
@@ -46,6 +48,13 @@ export function ParticleCanvas() {
   const fromColorRef = useRef<string>(STATE_COLORS.IDLE.accent)
   const toColorRef = useRef<string>(STATE_COLORS.IDLE.accent)
   const transitionStartRef = useRef<number>(0)
+  const transitionMsRef = useRef<number>(useTransitionStore.getState().transitionMs)
+
+  useEffect(() => {
+    return useTransitionStore.subscribe((s) => {
+      transitionMsRef.current = s.transitionMs
+    })
+  }, [])
 
   useEffect(() => {
     fromColorRef.current = currentColorRef.current
@@ -73,9 +82,6 @@ export function ParticleCanvas() {
 
     function draw(color: string) {
       if (!canvas || !ctx) return
-      // Rebuild the glow sprite only when the color actually changes
-      // (not every frame) — this keeps the hot path to just drawImage
-      // calls, which are cheap.
       if (color !== spriteColorRef.current) {
         spriteRef.current = buildGlowSprite(color)
         spriteColorRef.current = color
@@ -89,7 +95,7 @@ export function ParticleCanvas() {
       for (const p of particlesRef.current) {
         const px = p.x * w
         const py = p.y * h
-        const drawSize = p.size * 4 // sprite has soft falloff, needs to be bigger than the "core" dot size
+        const drawSize = p.size * 4
         ctx.globalAlpha = p.opacity
         ctx.drawImage(sprite, px - drawSize / 2, py - drawSize / 2, drawSize, drawSize)
       }
@@ -106,7 +112,7 @@ export function ParticleCanvas() {
       particlesRef.current = reconcileParticles(particlesRef.current, state)
 
       const elapsed = now - transitionStartRef.current
-      const t = Math.min(1, elapsed / COLOR_TRANSITION_MS)
+      const t = Math.min(1, elapsed / transitionMsRef.current)
       currentColorRef.current = lerpColor(fromColorRef.current, toColorRef.current, t)
 
       for (const p of particlesRef.current) stepParticle(p)

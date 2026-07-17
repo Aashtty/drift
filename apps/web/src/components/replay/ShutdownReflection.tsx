@@ -20,13 +20,19 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-/**
- * Reads `priority_task_id` (renamed from `anchor_task_id` — migration
- * 004) and labels it "focus" rather than "anchor," matching the rename
- * everywhere else. This was previously the one place in the app where
- * a Shutdown Ritual answer and an actual Anchor tag could show up
- * styled identically, which is exactly the confusion being fixed.
- */
+function TargetIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="8" r="0.9" fill="currentColor" />
+    </svg>
+  )
+}
+
+/** The chosen-priority line now reads as a distinct callout — a small
+ *  badge with an icon and an accent border — instead of plain text
+ *  indistinguishable from the metadata line above it. */
 export function ShutdownReflection({ shutdowns, taskNameById }: ShutdownReflectionProps) {
   if (shutdowns.length === 0) {
     return (
@@ -47,9 +53,10 @@ export function ShutdownReflection({ shutdowns, taskNameById }: ShutdownReflecti
               <span className="text-micro-mono" style={{ opacity: 0.5 }}>{s.completed_task_ids.length} finished · {s.carried_task_ids.length} carried</span>
             </div>
             {priorityName && (
-              <p style={{ fontSize: 12.5, color: 'var(--text-primary)', margin: '4px 0 0' }}>
-                → focus: <span style={{ color: 'var(--accent)' }}>{priorityName}</span>
-              </p>
+              <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 'var(--radius-full)', background: 'var(--surface-active)', border: '1px solid var(--accent)' }}>
+                <span style={{ color: 'var(--accent)', display: 'flex' }}><TargetIcon /></span>
+                <span style={{ fontSize: 12, color: 'var(--accent)' }}>{priorityName}</span>
+              </div>
             )}
             {s.notes && !priorityName && (
               <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '4px 0 0' }}>{s.notes}</p>

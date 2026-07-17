@@ -13,6 +13,15 @@ interface UseElasticTimerOptions {
   tickMs?: number
   autoStart?: boolean
   startedAtMs?: number
+  /**
+   * If set, the timer begins already paused, with elapsed frozen at
+   * this timestamp - this (plus initialTimerState's freezeAtMs) is
+   * what actually fixes "comes back not really paused": the recovered
+   * timer's very first render already shows the correct frozen value
+   * and isn't ticking, instead of computing off Date.now() and then
+   * needing a separate correction.
+   */
+  initialPausedAtMs?: number | null
 }
 
 export function useElasticTimer({
@@ -20,24 +29,16 @@ export function useElasticTimer({
   tickMs = 1000,
   autoStart = true,
   startedAtMs,
+  initialPausedAtMs = null,
 }: UseElasticTimerOptions) {
   const [state, setState] = useState<ElasticTimerState>(() =>
-    initialTimerState(startedAtMs, baseDurationSeconds)
+    initialTimerState(startedAtMs, baseDurationSeconds, initialPausedAtMs ?? undefined)
   )
-  const [running, setRunning] = useState(autoStart)
+  const startsPaused = initialPausedAtMs != null
+  const [running, setRunning] = useState(startsPaused ? false : autoStart)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pausedAtRef = useRef<number | null>(null)
-  // Mirrors `running` synchronously so pause()/resume() never need to
-  // read it through a setState updater. THIS IS THE PAUSE FIX: the
-  // previous version put side effects (writing pausedAtRef, calling
-  // setState) INSIDE a `setRunning(prev => { ...side effects...;
-  // return next })` updater. React 18 Strict Mode deliberately
-  // double-invokes updater functions in dev to catch exactly this —
-  // so pausedAtRef could get stamped twice, and the resume-time clock
-  // shift could get applied twice, silently corrupting the elapsed
-  // time on resume. Side effects now run exactly once, outside any
-  // updater, gated by this ref instead.
-  const runningRef = useRef(autoStart)
+  const pausedAtRef = useRef<number | null>(initialPausedAtMs ?? null)
+  const runningRef = useRef(startsPaused ? false : autoStart)
 
   useEffect(() => {
     runningRef.current = running
@@ -69,6 +70,10 @@ export function useElasticTimer({
   const resume = useCallback(() => {
     if (runningRef.current) return
     if (pausedAtRef.current != null) {
+      // Works correctly whether pausedAtRef holds "a second ago" (a
+      // normal in-session pause) or "yesterday" (a recovered session
+      // that sat paused across a reload/navigation) - either way this
+      // shifts startedAtMs forward by exactly the real idle duration.
       const pauseDurationMs = Date.now() - pausedAtRef.current
       setState((prev) => shiftStart(prev, pauseDurationMs))
       pausedAtRef.current = null

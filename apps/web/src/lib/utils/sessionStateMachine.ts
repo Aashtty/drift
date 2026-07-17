@@ -3,8 +3,6 @@ import type { AppState } from '@/types/appState'
 
 /**
  * The only moves DRIFT's real product flow is allowed to make.
- * (The Phase 0 dev-state-switcher intentionally bypasses this — it's a
- * debug tool, not part of the guarded flow.)
  *
  *   IDLE     -> FOCUS, SHUTDOWN
  *   FOCUS    -> FLOW, DRIFT, IDLE
@@ -13,21 +11,19 @@ import type { AppState } from '@/types/appState'
  *   SHUTDOWN -> IDLE             (ritual complete, new day)
  *
  * FOCUS/FLOW -> IDLE was missing until now. This is what "End Session"
- * (leaving a session without marking it done) actually needs — abandoning
- * a session is a real, legitimate move, and it was previously blocked by
- * the guard (isValidTransition returned false, so the store's transition()
- * silently warned and did nothing). The only reason that never visibly
- * broke anything is that Dashboard/Tasks/Replay/Settings each force an
- * UNGUARDED setState('IDLE') on their own mount as a safety net — which
- * masked the guard failing on every single "End Session" click. This
- * fixes it at the source: ending a session now transitions correctly on
- * its own, and the defensive resets on other pages become a true backstop
- * instead of doing the actual work.
+ * (leaving without marking a task done) actually needs — abandoning a
+ * session is a legitimate move, and it was previously blocked by the
+ * guard: isValidTransition returned false, so the store's transition()
+ * silently warned and did nothing. The only reason that never visibly
+ * broke anything is that Dashboard/Tasks/Replay/Routines/Settings each
+ * force an UNGUARDED setState('IDLE') on their own mount as a safety
+ * net — which masked the guard failing on every single "End Session"
+ * click. Fixed at the source: ending a session now transitions
+ * correctly on its own, and the defensive resets elsewhere become a
+ * true backstop instead of doing the actual work.
  *
  * DRIFT -> FOCUS was already valid but nothing used it — see
- * drift-summary/page.tsx's new "start another task" action, which lets
- * you go straight from finishing one task into the next without a detour
- * through IDLE.
+ * drift-summary/page.tsx's "start another task" section.
  */
 export const VALID_TRANSITIONS: Record<AppState, AppState[]> = {
   IDLE: ['FOCUS', 'SHUTDOWN'],
@@ -49,7 +45,6 @@ export class InvalidTransitionError extends Error {
   }
 }
 
-/** Throws if the move isn't allowed; returns the new state otherwise. */
 export function transition(from: AppState, to: AppState): AppState {
   if (!isValidTransition(from, to)) {
     throw new InvalidTransitionError(from, to)
@@ -57,25 +52,12 @@ export function transition(from: AppState, to: AppState): AppState {
   return to
 }
 
-/** Canonical left-to-right ordering, used anywhere the 5 states need a
- *  consistent sequence (dev switcher, the new Focus Path widget). */
 export const STATE_ORDER: AppState[] = ['IDLE', 'FOCUS', 'FLOW', 'DRIFT', 'SHUTDOWN']
 
 export interface StateMeta {
   label: string
-  /** What's true about this moment, in plain language. */
   description: string
-  /** How you actually get here — shown on locked/unreachable nodes so
-   *  the state graph explains itself instead of just looking greyed out
-   *  for no stated reason. */
   howReached: string
-  /** CSS var, not a raw hex — deliberately separate from stateColors.ts's
-   *  STATE_COLORS, which holds the raw hex values `applyState()` writes
-   *  onto :root for full-page theming. This is just UI copy metadata for
-   *  describing states in already-themed contexts (e.g. this widget), so
-   *  it references the same semantic vars EdgeArc already uses per state
-   *  rather than hardcoding hex a second time in a second place.
-   */
   colorVar: string
 }
 
@@ -112,7 +94,6 @@ export const STATE_META: Record<AppState, StateMeta> = {
   },
 }
 
-/** Which states can be reached directly from `state`, per the guard. */
 export function nextStatesFrom(state: AppState): AppState[] {
   return VALID_TRANSITIONS[state]
 }

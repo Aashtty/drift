@@ -205,21 +205,12 @@ export function topTasksByFocusTime(sessions: FocusSession[], limit = 5): TopTas
     .slice(0, limit)
 }
 
-// ---- New below this line ----
-
 export interface HyperfocusStats {
   count: number
   totalMinutes: number
   longestMinutes: number
 }
 
-/**
- * `hyperfocus` has been recorded on every session row since the very
- * first schema, but nothing in Replay ever surfaced it — Lock In's
- * effect on your actual focus patterns was invisible. This turns it
- * into three numbers: how often you locked in, how much total time
- * happened inside a lock-in, and your single longest one.
- */
 export function hyperfocusStats(sessions: FocusSession[]): HyperfocusStats {
   const hf = sessions.filter((s) => s.hyperfocus)
   const totalSeconds = hf.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0)
@@ -236,14 +227,6 @@ export interface AnchorTime {
   totalMinutes: number
 }
 
-/**
- * Sessions only carry a task_id, not an anchor_id directly — so this
- * takes a resolver function (task_id -> anchor_id) rather than joining
- * itself, keeping this module free of any store/task-shape dependency.
- * Which anchors actually consume your focus time was previously
- * uncomputable anywhere in the app despite every session already
- * carrying everything needed to derive it.
- */
 export function anchorTimeBreakdown(
   sessions: FocusSession[],
   anchorIdForTask: (taskId: string) => string | null,
@@ -269,12 +252,6 @@ export interface PeriodHighlights {
   activeDays: number
 }
 
-/**
- * Deliberately named "period highlights" rather than "personal
- * records" — this only sees whatever window was fetched (7/30/90
- * days), not true all-time history, so claiming an all-time record off
- * a bounded query would overclaim what the app actually knows.
- */
 export function periodHighlights(sessions: FocusSession[]): PeriodHighlights {
   let longestSessionMinutes = 0
   let longestSessionTaskId: string | null = null
@@ -300,4 +277,30 @@ export function periodHighlights(sessions: FocusSession[]): PeriodHighlights {
   }
 
   return { longestSessionMinutes, longestSessionTaskId, bestDay, activeDays: activeDates.size }
+}
+
+export interface DaySummary {
+  totalMinutes: number
+  sessionCount: number
+  flowRate: number
+  hyperfocusMinutes: number
+}
+
+/**
+ * New — Replay previously had no view of "just today" at all; every
+ * stat was either a rolling 7-day window or a range-selected multi-day
+ * total. This isolates a single calendar day for the new TODAY section.
+ */
+export function summarizeDay(sessions: FocusSession[], date: Date = new Date()): DaySummary {
+  const dateStr = date.toDateString()
+  const daySessions = sessions.filter((s) => new Date(s.started_at).toDateString() === dateStr)
+  const totalSeconds = daySessions.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0)
+  const flowCount = daySessions.filter((s) => s.flow_detected).length
+  const hyperfocusSeconds = daySessions.filter((s) => s.hyperfocus).reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0)
+  return {
+    totalMinutes: Math.round(totalSeconds / 60),
+    sessionCount: daySessions.length,
+    flowRate: daySessions.length === 0 ? 0 : Math.round((flowCount / daySessions.length) * 100),
+    hyperfocusMinutes: Math.round(hyperfocusSeconds / 60),
+  }
 }

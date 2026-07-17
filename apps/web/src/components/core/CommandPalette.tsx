@@ -4,13 +4,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'motion/react'
-import { useTaskStore } from '@/stores/taskStore'
 import { useBrainDumpUI } from '@/stores/brainDumpUIStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useUser } from '@/hooks/useUser'
-import { scoreTasksBatch } from '@/lib/ai/aesScorer'
+import { createScoredTask } from '@/lib/tasks/createScoredTask'
 import { toast } from '@/stores/toastStore'
-import type { Task, EnergyLevel } from '@/types/task'
 
 interface CommandPaletteProps {
   open: boolean
@@ -24,12 +22,6 @@ interface Command {
   hint?: string
   group: 'navigate' | 'act' | 'help'
   run: () => void
-}
-
-function aesToEnergy(aes: number): EnergyLevel {
-  if (aes <= 2) return 'low'
-  if (aes <= 3) return 'medium'
-  return 'high'
 }
 
 function NavIcon() {
@@ -66,20 +58,9 @@ function PlusIcon() {
 const GROUP_LABEL: Record<Command['group'], string> = { navigate: 'GO TO', act: 'ACTIONS', help: 'HELP' }
 const GROUP_ICON: Record<Command['group'], React.ReactNode> = { navigate: <NavIcon />, act: <BoltIcon />, help: <HelpIcon /> }
 
-/**
- * New — the app previously had no keyboard-driven way to jump between
- * pages, add a task, open capture, or end the day; every one of those
- * needed a mouse trip through the sidebar. Cmd/Ctrl+K opens this from
- * anywhere. Typing something that doesn't match a command falls
- * through to "add task: <text>" — so the palette doubles as capture
- * without ever needing to reach for the Brain Dump modal for a single
- * quick thought.
- */
 export function CommandPalette({ open, onClose, onOpenShortcuts }: CommandPaletteProps) {
   const router = useRouter()
   const { user } = useUser()
-  const addTask = useTaskStore((s) => s.addTask)
-  const updateTask = useTaskStore((s) => s.updateTask)
   const setBrainDumpOpen = useBrainDumpUI((s) => s.setOpen)
   const audioMode = useAudioStore((s) => s.mode)
   const setAudioMode = useAudioStore((s) => s.setMode)
@@ -100,18 +81,7 @@ export function CommandPalette({ open, onClose, onOpenShortcuts }: CommandPalett
     if (!user) return
     const trimmed = name.trim()
     if (!trimmed) return
-    const id = crypto.randomUUID()
-    const now = new Date().toISOString()
-    const task: Task = {
-      id, user_id: user.id, name: trimmed, status: 'active', aes_score: null, energy_level: null,
-      anchor_id: null, decay_started_at: null, completed_at: null, created_at: now, updated_at: now,
-    }
-    void addTask(task)
-    void scoreTasksBatch([trimmed])
-      .then(([scored]) => {
-        if (scored) void updateTask(id, { aes_score: scored.aes, energy_level: aesToEnergy(scored.aes) })
-      })
-      .catch(() => {})
+    createScoredTask({ userId: user.id, name: trimmed })
     toast.success(`Added "${trimmed}".`)
   }
 
@@ -119,6 +89,7 @@ export function CommandPalette({ open, onClose, onOpenShortcuts }: CommandPalett
     () => [
       { id: 'nav-dashboard', label: 'Dashboard', hint: 'go to the daily glance', group: 'navigate', run: () => router.push('/') },
       { id: 'nav-tasks', label: 'Tasks', hint: 'search, sort, and manage everything', group: 'navigate', run: () => router.push('/tasks') },
+      { id: 'nav-routines', label: 'Routines', hint: 'recurring tasks', group: 'navigate', run: () => router.push('/routines') },
       { id: 'nav-replay', label: 'Replay', hint: 'patterns and history', group: 'navigate', run: () => router.push('/replay') },
       { id: 'nav-settings', label: 'Settings', group: 'navigate', run: () => router.push('/settings') },
       { id: 'act-capture', label: 'Quick capture', hint: 'open the Brain Dump modal', group: 'act', run: () => setBrainDumpOpen(true) },

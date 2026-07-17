@@ -16,16 +16,18 @@ interface SidebarProps {
   onOpenShortcuts: () => void
 }
 
-const TREND_ARROW: Record<'up' | 'down' | 'flat', string> = { up: '↑', down: '↓', flat: '→' }
+const TREND_LABEL: Record<'up' | 'down' | 'flat', string> = { up: '^', down: 'v', flat: '-' }
 const TREND_COLOR: Record<'up' | 'down' | 'flat', string> = { up: 'var(--success)', down: 'var(--danger)', flat: 'var(--text-secondary)' }
+
 const NAV_LINKS = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/tasks', label: 'Tasks' },
-  { href: '/replay', label: 'Replay' },
+  { href: '/', label: 'Dashboard', collapsedLabel: 'D' },
+  { href: '/tasks', label: 'Tasks', collapsedLabel: 'T' },
+  { href: '/routines', label: 'Routines', collapsedLabel: 'Ro' },
+  { href: '/replay', label: 'Replay', collapsedLabel: 'Rp' },
 ]
 
 const COLLAPSE_KEY = 'drift:sidebar-collapsed'
-const EXPANDED_WIDTH = 236
+const EXPANDED_WIDTH = 244
 const COLLAPSED_WIDTH = 68
 
 function GearIcon() {
@@ -68,20 +70,36 @@ function KeyIcon() {
     </svg>
   )
 }
+function ChevronRightIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+      <path d="M6 3.5L10.5 8L6 12.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
 function initials(email?: string | null): string {
   if (!email) return '?'
   return email.slice(0, 2).toUpperCase()
 }
 
+function SidebarSectionLabel({ children, collapsed }: { children: React.ReactNode; collapsed: boolean }) {
+  if (collapsed) return null
+  return (
+    <p className="text-micro-mono" style={{ letterSpacing: '0.1em', opacity: 0.4, margin: '0 0 6px 4px' }}>
+      {children}
+    </p>
+  )
+}
+
 /**
- * Casing fix: "Dashboard / Tasks / Replay" above the divider were
- * Title Case while "end day / settings / shortcuts" below it were
- * lowercase — same kind of element (nav list item), sitting in the
- * same component, with two different conventions. Bottom items now
- * match. (Mood-setting headlines elsewhere — greetings, onboarding,
- * the Shutdown Ritual's questions — stay deliberately lowercase; that's
- * a different, intentional voice, not the same inconsistency.)
+ * Visual pass: nav links moved into a proper "NAVIGATE" section, and
+ * the momentum readout got a real card treatment (border, trend
+ * context in a sentence rather than a bare arrow) instead of being a
+ * loose number floating above a divider. Also purges every non-ASCII
+ * punctuation character (em dashes, middots, arrow glyphs) that was
+ * previously rendering as mojibake for some viewers - trend indicators
+ * are now plain ASCII (^ / v / -).
  */
 export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
   const pathname = usePathname()
@@ -124,12 +142,14 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
   }
 
   const width = collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH
+  const trendSentence = trend === 'up' ? 'trending up' : trend === 'down' ? 'trending down' : 'holding steady'
 
   return (
     <nav
       style={{
-        position: 'relative', zIndex: 1, width, minWidth: width, height: '100vh',
-        padding: collapsed ? '28px 12px' : '28px 20px', display: 'flex', flexDirection: 'column',
+        position: 'sticky', top: 0, alignSelf: 'flex-start', zIndex: 1,
+        width, minWidth: width, height: '100vh', flexShrink: 0,
+        padding: collapsed ? '28px 12px' : '28px 18px', display: 'flex', flexDirection: 'column',
         borderRight: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)',
         transition: 'width 220ms var(--ease-out-expo), padding 220ms var(--ease-out-expo)',
       }}
@@ -157,33 +177,35 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
         type="button"
         data-testid="momentum-display"
         onClick={() => router.push('/replay')}
-        title="momentum · based on the last 14 days · click for details"
-        style={{ marginTop: 26, marginBottom: 4, background: 'none', border: 'none', padding: 0, textAlign: collapsed ? 'center' : 'left', cursor: 'pointer', width: '100%' }}
+        title="momentum - based on the last 14 days - click for details"
+        className="glass glass-interactive"
+        style={{ marginTop: 22, marginBottom: 20, background: collapsed ? 'var(--surface)' : undefined, border: 'none', padding: collapsed ? '10px 4px' : '14px 16px', textAlign: 'left', cursor: 'pointer', width: '100%' }}
       >
-        <span style={{ fontSize: collapsed ? 18 : 24, fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-primary)' }}>{score}</span>
-        <span style={{ fontSize: 13, marginLeft: 6, color: TREND_COLOR[trend] }}>{TREND_ARROW[trend]}</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, justifyContent: collapsed ? 'center' : 'flex-start' }}>
+          <span style={{ fontSize: collapsed ? 17 : 26, fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-primary)' }}>{score}</span>
+          <span style={{ fontSize: 13, color: TREND_COLOR[trend], fontFamily: 'var(--font-mono)' }}>{TREND_LABEL[trend]}</span>
+        </div>
         {!collapsed && (
-          <p className="text-meta" style={{ marginTop: 2, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10.5, opacity: 0.6 }}>momentum</p>
+          <p className="text-meta" style={{ marginTop: 4, fontSize: 11, opacity: 0.65 }}>momentum - {trendSentence}</p>
         )}
       </button>
 
       <button
         type="button"
         onClick={onOpenPalette}
-        title="Command palette (⌘/Ctrl K)"
+        title="Command palette (Ctrl/Cmd K)"
         data-testid="sidebar-palette-trigger"
         className="glass glass-interactive"
-        style={{ marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8, padding: collapsed ? '8px' : '8px 10px', border: 'none', color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer' }}
+        style={{ marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8, padding: collapsed ? '8px' : '9px 12px', border: 'none', color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer' }}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <SearchIcon /> {!collapsed && 'search / jump'}
         </span>
-        {!collapsed && <span className="text-micro-mono">⌘K</span>}
+        {!collapsed && <span className="text-micro-mono">Ctrl K</span>}
       </button>
 
-      <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '22px 0' }} />
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <SidebarSectionLabel collapsed={collapsed}>NAVIGATE</SidebarSectionLabel>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 22 }}>
         {NAV_LINKS.map((link) => {
           const isActive = pathname === link.href
           const showLimboBadge = link.href === '/tasks' && limboCount > 0
@@ -195,7 +217,7 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
               title={collapsed ? link.label : undefined}
               className="sidebar-nav-link"
               style={{
-                position: 'relative', fontSize: 14, padding: collapsed ? '9px 0' : '9px 11px', borderRadius: 'var(--radius-sm)',
+                position: 'relative', fontSize: 14, padding: collapsed ? '9px 0' : '9px 12px', borderRadius: 'var(--radius-sm)',
                 color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)', textDecoration: 'none', display: 'flex',
                 alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8, zIndex: 1,
               }}
@@ -207,7 +229,10 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
                   style={{ position: 'absolute', inset: 0, background: 'var(--surface-active)', boxShadow: 'var(--glow-accent-sm)', borderRadius: 'var(--radius-sm)', zIndex: -1 }}
                 />
               )}
-              <span>{collapsed ? link.label[0] : link.label}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {isActive && !collapsed && <ChevronRightIcon />}
+                {collapsed ? link.collapsedLabel : link.label}
+              </span>
               {showLimboBadge && !collapsed && (
                 <span className="text-micro-mono" title={`${limboCount} task${limboCount === 1 ? '' : 's'} in limbo`} style={{ padding: '1px 6px', borderRadius: 999, background: 'var(--surface-active)', color: 'var(--text-tertiary)', fontSize: 10.5 }}>
                   {limboCount}
@@ -221,9 +246,7 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
         })}
       </div>
 
-      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0 0 12px' }} />
-
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
         <AnimatePresence>
           {!isOnline && (
             <motion.div
@@ -231,26 +254,27 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               data-testid="offline-indicator"
-              title="No connection — changes are saved locally and will sync once you're back online"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-tertiary)', justifyContent: collapsed ? 'center' : 'flex-start' }}
+              title="No connection - changes are saved locally and will sync once you're back online"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-tertiary)', justifyContent: collapsed ? 'center' : 'flex-start', marginBottom: 12 }}
             >
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)', flexShrink: 0 }} />
-              {!collapsed && 'offline — saving locally'}
+              {!collapsed && 'offline - saving locally'}
             </motion.div>
           )}
         </AnimatePresence>
 
+        <SidebarSectionLabel collapsed={collapsed}>SESSION</SidebarSectionLabel>
         <button
           type="button"
           data-testid="end-day-button"
           onClick={() => router.push('/shutdown')}
           title={collapsed ? 'End day' : undefined}
           className="sidebar-nav-link"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start', background: 'none', border: 'none', textAlign: 'left', color: 'var(--accent)', fontSize: 14, cursor: 'pointer', padding: 0 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start', background: 'none', border: 'none', textAlign: 'left', color: 'var(--accent)', fontSize: 14, cursor: 'pointer', padding: collapsed ? '9px 0' : '9px 12px' }}
         >
           <EndDayIcon /> {!collapsed && 'End Day'}
         </button>
-        <Link href="/settings" title={collapsed ? 'Settings' : undefined} className="sidebar-nav-link" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start', fontSize: 14, color: 'var(--text-secondary)', textDecoration: 'none' }}>
+        <Link href="/settings" title={collapsed ? 'Settings' : undefined} className="sidebar-nav-link" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start', fontSize: 14, color: 'var(--text-secondary)', textDecoration: 'none', padding: collapsed ? '9px 0' : '9px 12px' }}>
           <GearIcon /> {!collapsed && 'Settings'}
         </Link>
         <button
@@ -258,19 +282,20 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
           onClick={onOpenShortcuts}
           title={collapsed ? 'Shortcuts' : undefined}
           className="sidebar-nav-link"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start', background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer', padding: 0 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start', background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer', padding: collapsed ? '9px 0' : '9px 12px' }}
         >
           <KeyIcon /> {!collapsed && 'Shortcuts'}
         </button>
 
-        <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+        <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '10px 4px' }} />
 
         <button
           type="button"
           onClick={handleSignOut}
           title={collapsed ? user?.email ?? 'account' : undefined}
           data-testid="sidebar-account-trigger"
-          style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: 0, cursor: 'pointer', justifyContent: collapsed ? 'center' : 'flex-start' }}
+          className="glass-interactive"
+          style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: collapsed ? '6px 0' : '6px 8px', cursor: 'pointer', justifyContent: collapsed ? 'center' : 'flex-start', borderRadius: 'var(--radius-sm)' }}
         >
           <span
             aria-hidden="true"
@@ -281,7 +306,7 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
           {!collapsed && (
             <span style={{ textAlign: 'left', minWidth: 0 }}>
               <p className="text-meta" style={{ opacity: 0.7, fontSize: 12, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130 }}>{user?.email}</p>
-              <p className="text-micro-mono" style={{ opacity: 0.5, marginTop: 1 }}>Sign Out</p>
+              <p className="text-micro-mono" style={{ opacity: 0.5, marginTop: 1 }}>sign out</p>
             </span>
           )}
         </button>
@@ -296,7 +321,7 @@ export function Sidebar({ onOpenPalette, onOpenShortcuts }: SidebarProps) {
           opacity: 0.9;
         }
         [data-testid="momentum-display"]:hover {
-          opacity: 0.85;
+          opacity: 0.9;
         }
       `}</style>
     </nav>

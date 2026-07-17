@@ -8,14 +8,9 @@
   border-radius: 50%;
   filter: blur(95px) saturate(180%);
   opacity: 0.55;
-  /* screen blend lets overlapping blobs actually mix into new hues
-     (violet + cyan -> a cooler blue-white where they cross) instead of
-     just stacking as flat translucent circles — this is most of the
-     "lil more cooler" ask, delivered by how the existing three blobs
-     interact rather than by adding a fourth. */
   mix-blend-mode: screen;
   will-change: transform;
-  transition: background 800ms var(--ease-focus);
+  transition: background var(--ambient-transition-duration) var(--ease-focus);
 }
 
 .ambient-blob-1 {

@@ -1,7 +1,20 @@
 // apps/web/src/lib/audio/audioEngine.ts
 'use client'
 
-const RAMP_MS = 2000
+// Fixed, short envelopes — deliberately NOT tied to Settings' Ambient
+// Transition Speed. That setting is about how gradually the room's
+// *mood* shifts (particle color, background glow) over potentially
+// minutes; audio fade envelopes exist purely to avoid a click/pop when
+// starting or stopping a tone and need to stay in the few-hundred-ms
+// range regardless of that setting. Sharing one value between them was
+// the actual bug behind "doesn't go off / takes forever / doesn't
+// switch immediately" — with the ambient slider anywhere near its
+// default (30s), every sound action took up to 30 real seconds.
+const START_RAMP_MS = 600
+const STOP_RAMP_MS = 350
+// Used only for hardStop() — leaving /now should be near-silent
+// instantly, not even a third of a second of audible bleed.
+const IMMEDIATE_RAMP_MS = 80
 
 class AudioEngine {
   private ctx: AudioContext | null = null
@@ -39,7 +52,7 @@ class AudioEngine {
       await ctx.audioWorklet.addModule('/worklets/brown-noise-processor.js')
       this.brownWorkletLoaded = true
     }
-    if (this.brownNode) return // already running
+    if (this.brownNode) return
 
     this.brownNode = new AudioWorkletNode(ctx, 'brown-noise-processor')
     this.brownGain = ctx.createGain()
@@ -48,24 +61,33 @@ class AudioEngine {
     this.brownGain.connect(this.masterGain!)
 
     const now = ctx.currentTime
-    this.brownGain.gain.linearRampToValueAtTime(1, now + RAMP_MS / 1000)
+    this.brownGain.gain.linearRampToValueAtTime(1, now + START_RAMP_MS / 1000)
   }
 
-  async stopBrownNoise(): Promise<void> {
+  private teardownBrown(rampMs: number) {
     if (!this.ctx || !this.brownGain || !this.brownNode) return
     const now = this.ctx.currentTime
-    this.brownGain.gain.linearRampToValueAtTime(0, now + RAMP_MS / 1000)
+    this.brownGain.gain.linearRampToValueAtTime(0, now + rampMs / 1000)
     const node = this.brownNode
     const gain = this.brownGain
     setTimeout(() => {
       node.disconnect()
       gain.disconnect()
-    }, RAMP_MS + 100)
+    }, rampMs + 100)
     this.brownNode = null
     this.brownGain = null
   }
 
-  /** 200Hz left ear, 214Hz right ear -> 14Hz beat frequency (beta / focus range). Only meant to run during FLOW. */
+  async stopBrownNoise(): Promise<void> {
+    this.teardownBrown(STOP_RAMP_MS)
+  }
+
+  /** Used only when leaving /now — bypasses the normal stop fade for a
+   *  near-instant silence instead of up to STOP_RAMP_MS of audible tail. */
+  async stopBrownNoiseImmediate(): Promise<void> {
+    this.teardownBrown(IMMEDIATE_RAMP_MS)
+  }
+
   async startBinaural(): Promise<void> {
     const ctx = await this.ensureContext()
     if (this.binauralLeft) return
@@ -89,13 +111,13 @@ class AudioEngine {
     this.binauralRight.start()
 
     const now = ctx.currentTime
-    this.binauralGain.gain.linearRampToValueAtTime(0.5, now + RAMP_MS / 1000)
+    this.binauralGain.gain.linearRampToValueAtTime(0.5, now + START_RAMP_MS / 1000)
   }
 
-  async stopBinaural(): Promise<void> {
+  private teardownBinaural(rampMs: number) {
     if (!this.ctx || !this.binauralGain || !this.binauralLeft || !this.binauralRight) return
     const now = this.ctx.currentTime
-    this.binauralGain.gain.linearRampToValueAtTime(0, now + RAMP_MS / 1000)
+    this.binauralGain.gain.linearRampToValueAtTime(0, now + rampMs / 1000)
     const left = this.binauralLeft
     const right = this.binauralRight
     setTimeout(() => {
@@ -103,9 +125,17 @@ class AudioEngine {
       right.stop()
       left.disconnect()
       right.disconnect()
-    }, RAMP_MS + 100)
+    }, rampMs + 100)
     this.binauralLeft = null
     this.binauralRight = null
+  }
+
+  async stopBinaural(): Promise<void> {
+    this.teardownBinaural(STOP_RAMP_MS)
+  }
+
+  async stopBinauralImmediate(): Promise<void> {
+    this.teardownBinaural(IMMEDIATE_RAMP_MS)
   }
 }
 

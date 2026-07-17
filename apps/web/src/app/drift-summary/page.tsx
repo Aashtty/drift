@@ -12,16 +12,6 @@ import { useAppState } from '@/hooks/useAppState'
 
 const NEXT_TASK_LIMIT = 4
 
-/**
- * New: a "start another task" section using DRIFT -> FOCUS, a transition
- * that's been valid in the state machine since Phase 0 but nothing ever
- * used — finishing a task always detoured through IDLE even if you
- * wanted to go straight into the next thing. No manual transition() call
- * is needed here: NowSession's own mount effect already calls
- * transition('FOCUS') unconditionally, and DRIFT -> FOCUS is valid, so
- * navigating straight to /now while state is still DRIFT resolves
- * correctly through the guard on its own.
- */
 export default function DriftSummaryPage() {
   const router = useRouter()
   const lastSummary = useSessionStore((s) => s.lastSummary)
@@ -45,6 +35,12 @@ export default function DriftSummaryPage() {
     router.push('/')
   }
 
+  // Puts DRIFT -> FOCUS to actual use — previously valid in the state
+  // machine but nothing ever exercised it, so finishing a task always
+  // detoured through IDLE even when the obvious next move was starting
+  // the next one. No manual transition() call needed: NowSession's own
+  // mount effect already calls transition('FOCUS') unconditionally, and
+  // DRIFT -> FOCUS is a valid move, so it resolves correctly on its own.
   function handleStartAnother(taskId: string, name: string, anchorId: string | null) {
     clearSummary()
     const anchor = anchorId ? anchors.find((a) => a.id === anchorId) : null
@@ -55,16 +51,7 @@ export default function DriftSummaryPage() {
 
   return (
     <main
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 28,
-        padding: 24,
-      }}
+      style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, padding: 24 }}
     >
       <SessionSummaryCard minutes={minutes} onContinue={handleContinue} />
 
@@ -86,10 +73,7 @@ export default function DriftSummaryPage() {
                   data-testid="drift-summary-start-another"
                   onClick={() => handleStartAnother(t.id, t.name, t.anchor_id)}
                   className="glass glass-interactive"
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
-                    border: 'none', color: 'var(--text-primary)', fontSize: 13, textAlign: 'left', cursor: 'pointer',
-                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: 'none', color: 'var(--text-primary)', fontSize: 13, textAlign: 'left', cursor: 'pointer' }}
                 >
                   {anchor && <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', background: anchor.color, flexShrink: 0 }} />}
                   <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span>

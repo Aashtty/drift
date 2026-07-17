@@ -24,8 +24,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <ParticleCanvas />
       <EdgeArc
         fuzzyTime={settings?.fuzzy_time ?? false}
-        dayStartHour={settings ? Number(settings.day_start.split(':')[0]) : 9}
-        dayEndHour={settings ? Number(settings.day_end.split(':')[0]) : 19}
+        dayStart={settings?.day_start ?? '09:00'}
+        dayEnd={settings?.day_end ?? '19:00'}
         nearEvent={nearEvent}
         events={events}
       />

@@ -3,7 +3,10 @@ import { useEffect, useState, useCallback } from 'react'
 import type { CalendarEvent } from '@/types/calendar'
 import { fetchEventsRemote } from '@/lib/db/queries'
 
-const POLL_MS = 60_000
+// Was 60_000 — the main reason events/EdgeArc felt like they only
+// updated "after a long time" or on reload: a new or deleted event
+// could take up to a full minute to reach the UI. Lowered to 20s.
+const POLL_MS = 20_000
 const PULSE_WINDOW_MS = 15 * 60 * 1000
 
 export function useCalendarBridge(userId: string | null) {

@@ -15,30 +15,19 @@ import { TaskDetailSheet } from '@/components/tasks/TaskDetailSheet'
 import { BulkActionBar } from '@/components/tasks/BulkActionBar'
 import { useUser } from '@/hooks/useUser'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { scoreTasksBatch } from '@/lib/ai/aesScorer'
+import { createScoredTask } from '@/lib/tasks/createScoredTask'
+import { ENERGY_COLOR } from '@/lib/utils/energyColors'
 import { toast } from '@/stores/toastStore'
 import type { Task, EnergyLevel } from '@/types/task'
-
+import { useTodaysPriorityTaskId } from '@/hooks/useTodaysPriority'
+import { Dropdown } from '@/components/ui/Dropdown'
 type SortMode = 'aes' | 'alpha' | 'recent' | 'anchor'
 
 const SORT_LABELS: Record<SortMode, string> = {
   aes: 'by effort',
-  alpha: 'a → z',
+  alpha: 'a -> z',
   recent: 'recently updated',
   anchor: 'by anchor',
-}
-
-const ENERGY_COLOR: Record<'low' | 'medium' | 'high' | 'unscored', string> = {
-  low: 'var(--success)',
-  medium: 'var(--accent-b)',
-  high: 'var(--accent)',
-  unscored: 'var(--text-tertiary)',
-}
-
-function aesToEnergy(aes: number): EnergyLevel {
-  if (aes <= 2) return 'low'
-  if (aes <= 3) return 'medium'
-  return 'high'
 }
 
 function ClockIcon() {
@@ -109,44 +98,21 @@ function RailCard({ title, children }: { title: string; children: React.ReactNod
 }
 function MiniStat({ label, value, onClick }: { label: string; value: number; onClick?: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!onClick}
-      style={{ textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: onClick ? 'pointer' : 'default' }}
-    >
+    <button type="button" onClick={onClick} disabled={!onClick} style={{ textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: onClick ? 'pointer' : 'default' }}>
       <p style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{value}</p>
       <p className="text-micro-mono" style={{ marginTop: 2, color: onClick ? 'var(--accent)' : 'var(--text-tertiary)' }}>{label}</p>
     </button>
   )
 }
 
-/**
- * Toolbar's separate "Limbo" and "Archive" buttons are now one grouped
- * segmented control that opens the same VaultPanel at the right tab —
- * previously two visually unrelated pill buttons opening two nearly
- * identical popups, which was the actual source of "what's the
- * difference between these." Overview's "in limbo" / "archived" numbers
- * are now clickable too, offering the same deep-link from a second spot.
- */
 function VaultToolbarControl({ limboCount, archivedCount, onOpen }: { limboCount: number; archivedCount: number; onOpen: (tab: 'limbo' | 'archived') => void }) {
   return (
     <div className="glass" style={{ display: 'flex', alignItems: 'center', borderRadius: 'var(--radius-full)', overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <button
-        type="button"
-        data-testid="vault-limbo-trigger"
-        onClick={() => onOpen('limbo')}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}
-      >
+      <button type="button" data-testid="vault-limbo-trigger" onClick={() => onOpen('limbo')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>
         <ClockIcon /> Limbo {limboCount > 0 && <CountBadge>{limboCount}</CountBadge>}
       </button>
       <div aria-hidden="true" style={{ width: 1, height: 18, background: 'var(--border)' }} />
-      <button
-        type="button"
-        data-testid="vault-archive-trigger"
-        onClick={() => onOpen('archived')}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}
-      >
+      <button type="button" data-testid="vault-archive-trigger" onClick={() => onOpen('archived')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>
         <ArchiveBoxIcon /> Archived {archivedCount > 0 && <CountBadge>{archivedCount}</CountBadge>}
       </button>
     </div>
@@ -157,7 +123,7 @@ export default function TasksPage() {
   const { user } = useUser()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { tasks, anchors, anchorFor, setStatus, tasksByStatus, markComplete, updateTask, removeTask, addTask } = useTaskEngine(user?.id ?? '')
+  const { tasks, anchors, anchorFor, setStatus, tasksByStatus, markComplete, updateTask, removeTask } = useTaskEngine(user?.id ?? '')
   const settings = useSettingsStore((s) => s.settings)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const updateSettings = useSettingsStore((s) => s.updateSettings)
@@ -172,7 +138,12 @@ export default function TasksPage() {
   const [vaultOpen, setVaultOpen] = useState(false)
   const [vaultTab, setVaultTab] = useState<'limbo' | 'archived'>('limbo')
   const [anchorManagerOpen, setAnchorManagerOpen] = useState(false)
-  const [detailTask, setDetailTask] = useState<Task | null>(null)
+
+  // Same fix as Dashboard - id-based lookup so store updates (e.g. an
+  // energy change made inside the sheet) are always reflected.
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
+  const detailTask = detailTaskId ? tasks.find((t) => t.id === detailTaskId) ?? null : null
+  const priorityTaskId = useTodaysPriorityTaskId()
   const [search, setSearch] = useState('')
   const [sortMode, setSortMode] = useState<SortMode>('aes')
   const [anchorFilter, setAnchorFilter] = useState<string | null>(() => searchParams.get('anchor'))
@@ -252,18 +223,7 @@ export default function TasksPage() {
   }
 
   function quickAdd(name: string, anchorId: string | null) {
-    const id = crypto.randomUUID()
-    const now = new Date().toISOString()
-    const task: Task = {
-      id, user_id: user.id, name, status: 'active', aes_score: null, energy_level: null,
-      anchor_id: anchorId, decay_started_at: null, completed_at: null, created_at: now, updated_at: now,
-    }
-    void addTask(task)
-    void scoreTasksBatch([name])
-      .then(([scored]) => {
-        if (scored) void updateTask(id, { aes_score: scored.aes, energy_level: aesToEnergy(scored.aes) })
-      })
-      .catch(() => {})
+    createScoredTask({ userId: user.id, name, anchorId })
   }
 
   function handleComplete(task: Task) {
@@ -314,7 +274,7 @@ export default function TasksPage() {
           <div>
             <p className="text-section-label">TASKS</p>
             <p className="text-meta" style={{ marginTop: 4, fontSize: 13 }}>
-              {activeTasks.length} active · {limboTasks.length} in limbo{archivedTasks.length > 0 && ` · ${archivedTasks.length} archived`}
+              {activeTasks.length} active - {limboTasks.length} in limbo{archivedTasks.length > 0 && ` - ${archivedTasks.length} archived`}
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -342,16 +302,7 @@ export default function TasksPage() {
                 style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', padding: '8px 12px 8px 34px', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
               />
             </div>
-            <select
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as SortMode)}
-              data-testid="task-sort-select"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', padding: '8px 14px', color: 'var(--text-secondary)', fontSize: 12.5, outline: 'none', cursor: 'pointer' }}
-            >
-              {Object.entries(SORT_LABELS).map(([mode, label]) => (
-                <option key={mode} value={mode}>{label}</option>
-              ))}
-            </select>
+            <Dropdown value={sortMode} onChange={setSortMode} options={Object.entries(SORT_LABELS).map(([value, label]) => ({ value: value as SortMode, label }))} testId="task-sort-select" minWidth={170} />
           </div>
           {anchors.length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -371,26 +322,13 @@ export default function TasksPage() {
           sortComparator={sortComparator}
           onTaskStart={(task) => startTask(task.id, task.name, anchorFor(task)?.name ?? null)}
           onTaskComplete={handleComplete}
-          onOpenDetail={setDetailTask}
+          onOpenDetail={(task) => setDetailTaskId(task.id)}
           onEnergyChange={(level) => void updateSettings({ energy_default: level })}
           selectionMode={selectionMode}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
+          priorityTaskId={priorityTaskId}
         />
-
-        {completedToday.length > 0 && (
-          <div style={{ marginTop: 32 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <p className="text-section-label" style={{ letterSpacing: '0.08em', opacity: 0.7 }}>DONE TODAY · {completedToday.length}</p>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {completedToday.map((t) => (
-                <div key={t.id} style={{ padding: '8px 14px', borderRadius: 'var(--radius-sm)', fontSize: 13, color: 'var(--text-tertiary)', textDecoration: 'line-through', opacity: 0.7 }}>{t.name}</div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -405,7 +343,7 @@ export default function TasksPage() {
 
         <RailCard title="BY ENERGY">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(['low', 'medium', 'high', 'unscored'] as const).map((k) => (
+            {(['low', 'medium', 'high'] as const).map((k) => (
               <div key={k}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{k}</span>
@@ -416,6 +354,15 @@ export default function TasksPage() {
                 </div>
               </div>
             ))}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Unscored</span>
+                <span className="text-micro-mono">{energyBuckets.unscored}</span>
+              </div>
+              <div style={{ height: 5, borderRadius: 999, background: 'var(--surface)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${(energyBuckets.unscored / maxBucket) * 100}%`, background: 'var(--text-tertiary)', opacity: 0.8, borderRadius: 999, transition: 'width 500ms var(--ease-focus)' }} />
+              </div>
+            </div>
           </div>
         </RailCard>
 
@@ -456,15 +403,16 @@ export default function TasksPage() {
       <TaskDetailSheet
         task={detailTask}
         anchors={anchors}
-        onClose={() => setDetailTask(null)}
+        isPriority={detailTask?.id === priorityTaskId}
+        onClose={() => setDetailTaskId(null)}
         onRename={(id, name) => void updateTask(id, { name })}
         onSetAnchor={(id, anchorId) => void updateTask(id, { anchor_id: anchorId })}
         onSetEnergy={(id, level) => void updateTask(id, { energy_level: level as EnergyLevel })}
-        onStart={(task) => { setDetailTask(null); startTask(task.id, task.name, anchorFor(task)?.name ?? null) }}
-        onMarkDone={(task) => { handleComplete(task); setDetailTask(null) }}
-        onSendToLimbo={(task) => { setStatus(task.id, 'limbo'); setDetailTask(null); toast.undo(`"${task.name}" sent to limbo.`, () => setStatus(task.id, 'active')) }}
-        onArchive={(task) => { setStatus(task.id, 'archived'); setDetailTask(null); toast.undo(`"${task.name}" archived.`, () => setStatus(task.id, 'active')) }}
-        onRestore={(task) => { setStatus(task.id, 'active'); setDetailTask(null) }}
+        onStart={(task) => { setDetailTaskId(null); startTask(task.id, task.name, anchorFor(task)?.name ?? null) }}
+        onMarkDone={(task) => { handleComplete(task); setDetailTaskId(null) }}
+        onSendToLimbo={(task) => { setStatus(task.id, 'limbo'); setDetailTaskId(null); toast.undo(`"${task.name}" sent to limbo.`, () => setStatus(task.id, 'active')) }}
+        onArchive={(task) => { setStatus(task.id, 'archived'); setDetailTaskId(null); toast.undo(`"${task.name}" archived.`, () => setStatus(task.id, 'active')) }}
+        onRestore={(task) => { setStatus(task.id, 'active'); setDetailTaskId(null) }}
         onDelete={(task) => { void removeTask(task.id); toast.info(`"${task.name}" deleted.`) }}
       />
       <BulkActionBar count={selectedIds.size} onComplete={() => bulkApply('done')} onLimbo={() => bulkApply('limbo')} onArchive={() => bulkApply('archived')} onClear={clearSelection} />

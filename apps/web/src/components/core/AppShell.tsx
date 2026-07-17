@@ -10,10 +10,15 @@ import { Sidebar } from '@/components/core/Sidebar'
 import { Onboarding } from '@/components/onboarding/Onboarding'
 import { ShortcutCheatSheet } from '@/components/core/ShortcutCheatSheet'
 import { CommandPalette } from '@/components/core/CommandPalette'
+import { DayEndPrompt } from '@/components/core/DayEndPrompt'
+import { EventTriggerPopup } from '@/components/core/EventTriggerPopup'
 import { Toast } from '@/components/core/Toast'
 import { useCheatSheetShortcut } from '@/hooks/useCheatSheetShortcut'
+import { useRoutineEngine } from '@/hooks/useRoutineEngine'
+import { useRescoreOnReconnect } from '@/hooks/useRescoreOnReconnect'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAnchorStore } from '@/stores/anchorStore'
+import { useRoutineStore } from '@/stores/routineStore'
 import { organizeBrainDump } from '@/lib/ai/taskOrganizer'
 import { useUser } from '@/hooks/useUser'
 import { useOnboarding } from '@/hooks/useOnboarding'
@@ -47,13 +52,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, loading } = useUser()
   const addTask = useTaskStore((s) => s.addTask)
   const anchors = useAnchorStore((s) => s.anchors)
+  const loadRoutines = useRoutineStore((s) => s.loadFromRemote)
   const { shouldShow: showOnboarding, markSeen } = useOnboarding(user?.id ?? null)
   const [brainDumpOpenFromOnboarding, setBrainDumpOpenFromOnboarding] = useState(false)
   const cheatSheet = useCheatSheetShortcut()
-  // New — Cmd/Ctrl+K opens a global command palette. Kept as local
-  // state here (rather than a store) since only this one place needs
-  // to know about it; every trigger (sidebar button, keyboard shortcut,
-  // the palette's own "keyboard shortcuts" entry) just calls setOpen.
   const [paletteOpen, setPaletteOpen] = useState(false)
 
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname)
@@ -63,6 +65,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading && !user && !isPublicRoute) router.push('/login')
   }, [loading, user, isPublicRoute, router])
+
+  useEffect(() => {
+    if (user) void loadRoutines(user.id)
+  }, [user, loadRoutines])
+
+  useRoutineEngine(user?.id ?? null)
+  useRescoreOnReconnect()
 
   useEffect(() => {
     if (isPublicRoute || showOnboarding) return
@@ -96,7 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         .filter(Boolean)
         .map((name) => makeFallbackTask(name, user.id))
       for (const task of fallbackTasks) void addTask(task)
-      toast.info(`Saved ${fallbackTasks.length} task${fallbackTasks.length === 1 ? '' : 's'} — couldn't auto-organize this time, so they're unsorted.`)
+      toast.info(`Saved ${fallbackTasks.length} task${fallbackTasks.length === 1 ? '' : 's'} - couldn't auto-organize this time, so they're unsorted.`)
     }
   }
 
@@ -113,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {user && showOnboarding && <Onboarding onFinish={finishOnboarding} />}
       <div style={{ position: 'relative', zIndex: 1, display: 'flex' }}>
         {!hideSidebar && !showOnboarding && <Sidebar onOpenPalette={() => setPaletteOpen(true)} onOpenShortcuts={() => cheatSheet.setOpen(true)} />}
-        <div style={{ flex: 1 }}>{children}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
       </div>
       {user && !isPublicRoute && !showOnboarding && (
         <BrainDump
@@ -127,6 +136,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       {user && !isPublicRoute && !showOnboarding && (
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onOpenShortcuts={() => cheatSheet.setOpen(true)} />
       )}
+      {user && !isPublicRoute && !showOnboarding && <DayEndPrompt />}
+      {user && !isPublicRoute && <EventTriggerPopup />}
       <Toast />
     </>
   )
