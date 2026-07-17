@@ -26,6 +26,15 @@ function SpinnerIcon() {
 function ArrowLeftIcon() {
   return (<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10.5 3L5 8l5.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>)
 }
+function WaveIcon() {
+  return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 10c1.5-3 3.5-3 5 0s3.5 3 5 0s3.5-3 4-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>)
+}
+function BoltIcon() {
+  return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M9 1.5L3.5 9h4L6.5 14.5L13 6.5h-4L9 1.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>)
+}
+function MoonIcon() {
+  return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5a5 5 0 0 0 7 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>)
+}
 
 function passwordStrength(password: string): { label: string; color: string; score: number } {
   if (!password) return { label: '', color: 'var(--text-tertiary)', score: 0 }
@@ -40,19 +49,12 @@ function passwordStrength(password: string): { label: string; color: string; sco
   return { label: 'strong', color: 'var(--success)', score: 3 }
 }
 
-/**
- * Complete redesign: shared AuthMark for brand consistency with the
- * rest of the app, a segmented sign-in/sign-up toggle instead of a
- * bottom text link, a real forgot-password flow (previously missing
- * entirely - a locked-out person had no recovery path), and a simple
- * password strength meter on sign-up.
- *
- * Real bug carried over from the previous version, still fixed here:
- * signUp() can return {error: null, data: {session: null}} when
- * Supabase's email-confirmation setting is on - unconditionally
- * routing to '/' in that case sends someone who isn't actually
- * authenticated to a protected route that just bounces them back.
- */
+const FEATURES = [
+  { icon: <WaveIcon />, label: 'timers that count up, not down' },
+  { icon: <BoltIcon />, label: 'flow gets noticed, not rushed' },
+  { icon: <MoonIcon />, label: 'a real end to your day' },
+]
+
 export default function LoginPage() {
   const router = useRouter()
   const [mode, setMode] = useState<Mode>('signin')
@@ -118,9 +120,9 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <motion.div key={shakeKey} initial={{ opacity: 0, y: 16 }} animate={error ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, 0] } : { opacity: 1, y: 0 }} transition={{ duration: error ? 0.4 : 0.5, ease: [0.16, 1, 0.3, 1] }} style={{ position: 'relative', zIndex: 1 }}>
-        <GlassPanel chromatic style={{ padding: 36, width: 380 }}>
+    <main style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22, padding: 24 }}>
+      <motion.div key={shakeKey} initial={{ opacity: 0, y: 16 }} animate={error ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, 0] } : { opacity: 1, y: 0 }} transition={{ duration: error ? 0.4 : 0.5, ease: [0.16, 1, 0.3, 1] }} style={{ position: 'relative', zIndex: 1, width: 'min(380px, 92vw)' }}>
+        <GlassPanel chromatic style={{ padding: 36 }}>
           <AuthMark />
           <div style={{ textAlign: 'center', marginBottom: 22 }}>
             <p className="text-glow" style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.04em', margin: 0 }}>DRIFT</p>
@@ -208,6 +210,17 @@ export default function LoginPage() {
           </AnimatePresence>
         </GlassPanel>
       </motion.div>
+
+      {/* New - a quiet feature strip so the screen sells the product,
+          not just a form. No new dependency, three icon+label pairs. */}
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 'min(380px, 92vw)' }}>
+        {FEATURES.map((f) => (
+          <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-tertiary)' }}>
+            <span style={{ display: 'flex', color: 'var(--accent)', opacity: 0.8 }}>{f.icon}</span>
+            <span style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{f.label}</span>
+          </div>
+        ))}
+      </div>
     </main>
   )
 }

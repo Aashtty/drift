@@ -223,9 +223,9 @@ export default function TasksPage() {
   }
 
   function quickAdd(name: string, anchorId: string | null) {
+    if (!user) return
     createScoredTask({ userId: user.id, name, anchorId })
   }
-
   function handleComplete(task: Task) {
     void markComplete(task)
     toast.undo(`"${task.name}" marked done.`, () => setStatus(task.id, 'active'))

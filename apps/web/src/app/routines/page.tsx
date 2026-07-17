@@ -75,6 +75,7 @@ export default function RoutinesPage() {
   }
 
   function handleSave(data: { name: string; cadence: RoutineCadence; weekdays: number[]; dayOfMonth: number | null; anchorId: string | null; energyLevel: EnergyLevel | null }) {
+    if(!user)return
     if (editing) {
       void updateRoutine(editing.id, {
         name: data.name, cadence: data.cadence, weekdays: data.weekdays,

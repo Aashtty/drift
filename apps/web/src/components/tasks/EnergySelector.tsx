@@ -3,6 +3,7 @@
 
 import { motion } from 'motion/react'
 import type { EnergyLevel } from '@/types/task'
+import type { ReactElement } from 'react'
 
 interface EnergySelectorProps {
   value: EnergyLevel
@@ -56,7 +57,7 @@ function BoltIcon() {
   )
 }
 
-const ICONS: Record<EnergyLevel, () => JSX.Element> = {
+const ICONS: Record<EnergyLevel, () => ReactElement> = {
   low: LeafIcon,
   medium: HalfBoltIcon,
   high: BoltIcon,

@@ -69,7 +69,7 @@ export function ParticleCanvas() {
     if (!ctx) return
 
     function resize() {
-      if (!canvas) return
+      if (!canvas || !ctx) return
       const dpr = window.devicePixelRatio || 1
       canvas.width = window.innerWidth * dpr
       canvas.height = window.innerHeight * dpr

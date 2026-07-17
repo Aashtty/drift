@@ -24,13 +24,6 @@ function CheckIcon() {
 
 type Status = 'checking' | 'ready' | 'invalid' | 'done'
 
-/**
- * New page - the other half of forgot-password. Supabase's client
- * (detectSessionInUrl: true, see lib/db/supabase.ts) auto-parses the
- * recovery token from the email link's URL hash and establishes a
- * temporary session; this page just waits for that, then lets the
- * person set a new password via supabase.auth.updateUser().
- */
 export default function ResetPasswordPage() {
   const router = useRouter()
   const [status, setStatus] = useState<Status>('checking')
@@ -74,8 +67,8 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <GlassPanel chromatic style={{ padding: 36, width: 380, position: 'relative', zIndex: 1 }}>
+    <main style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <GlassPanel chromatic style={{ padding: 36, width: 'min(380px, 92vw)', position: 'relative', zIndex: 1 }}>
         <AuthMark />
         <div style={{ textAlign: 'center', marginBottom: 22 }}>
           <p className="text-glow" style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.04em', margin: 0 }}>DRIFT</p>
