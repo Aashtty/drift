@@ -36,6 +36,7 @@ export function InterventionPanel({
         width: 200,
         height: '100vh',
         zIndex: 2147483647, // max — must sit above any host page content
+        pointerEvents:'auto',
         background: 'rgba(10,10,26,0.85)',
         backdropFilter: 'blur(30px) saturate(180%)',
         borderLeft: '1px solid rgba(255,255,255,0.08)',
