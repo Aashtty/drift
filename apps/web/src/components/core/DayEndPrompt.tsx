@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'motion/react'
 import { GlassPanel } from '@/components/ui/GlassPanel'
 import { useUser } from '@/hooks/useUser'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useAudioStore } from '@/stores/audioStore'
+import { playNotificationChime } from '@/lib/audio/notificationChime'
 import { parseHHMM } from '@/lib/utils/dayWindow'
 import { isDayEndSnoozed, snoozeDayEndForMinutes } from '@/lib/utils/dayEndSnooze'
 
@@ -17,21 +19,13 @@ function minutesSinceMidnight(d: Date): number {
   return d.getHours() * 60 + d.getMinutes()
 }
 
-/**
- * Now shares its snooze logic (isDayEndSnoozed / snoozeDayEndForMinutes)
- * with shutdown/page.tsx instead of owning a private copy - that shared
- * state is what makes "prompt doesn't pop back up right after you
- * finish the ritual" actually work (see dayEndSnooze.ts). The
- * day-end-has-passed detection itself is unchanged - it was already
- * correct, since it only compares "now" against a single clock time
- * (day_end), which doesn't have the start/end pairing problem EdgeArc had.
- */
 export function DayEndPrompt() {
   const { user } = useUser()
   const router = useRouter()
   const pathname = usePathname()
   const settings = useSettingsStore((s) => s.settings)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
+  const volume = useAudioStore((s) => s.volume)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -58,12 +52,18 @@ export function DayEndPrompt() {
         setOpen(false)
         return
       }
-      setOpen(true)
+      // Chime only fires on the transition into "open" - guarded by
+      // functional setOpen so a re-run of check() every 30s while
+      // already open doesn't replay the sound on every poll.
+      setOpen((prevOpen) => {
+        if (!prevOpen) void playNotificationChime(volume)
+        return true
+      })
     }
     check()
     const interval = setInterval(check, CHECK_INTERVAL_MS)
     return () => clearInterval(interval)
-  }, [settings, pathname])
+  }, [settings, pathname, volume])
 
   function snooze(minutes: number) {
     snoozeDayEndForMinutes(minutes)
@@ -91,24 +91,12 @@ export function DayEndPrompt() {
               <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 22 }}>
                 It's past the day-end time you set - want to run the shutdown ritual now, or later?
               </p>
-              <button
-                type="button"
-                data-testid="day-end-start-now"
-                onClick={startShutdown}
-                className="glass glass-interactive"
-                style={{ width: '100%', padding: '11px 0', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer', boxShadow: 'var(--glow-accent-sm)', marginBottom: 12 }}
-              >
+              <button type="button" data-testid="day-end-start-now" onClick={startShutdown} className="glass glass-interactive" style={{ width: '100%', padding: '11px 0', border: 'none', color: 'var(--accent)', fontSize: 14, cursor: 'pointer', boxShadow: 'var(--glow-accent-sm)', marginBottom: 12 }}>
                 End day now
               </button>
               <div style={{ display: 'flex', gap: 6 }}>
                 {[5, 10, 30].map((minutes) => (
-                  <button
-                    key={minutes}
-                    type="button"
-                    data-testid={`day-end-snooze-${minutes}`}
-                    onClick={() => snooze(minutes)}
-                    style={{ flex: 1, padding: '9px 0', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: 12.5, cursor: 'pointer' }}
-                  >
+                  <button key={minutes} type="button" data-testid={`day-end-snooze-${minutes}`} onClick={() => snooze(minutes)} style={{ flex: 1, padding: '9px 0', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: 12.5, cursor: 'pointer' }}>
                     remind in {minutes}m
                   </button>
                 ))}

@@ -3,11 +3,17 @@ import { useEffect, useState } from 'react'
 import { useUser } from '@/hooks/useUser'
 import { fetchShutdownsRemote } from '@/lib/db/queries'
 
+export const SHUTDOWN_COMPLETED_EVENT = 'drift:shutdown-completed'
+
 /**
- * Extracted from NextMoveWidget so Dashboard, Tasks, and TaskDetailSheet
- * can all mark "this is the task I chose as tomorrow's priority" -
- * previously that acknowledgment only existed on Dashboard's widget and
- * nowhere else, per feedback that it wasn't recognized anywhere.
+ * Real bug fix: this used to fetch once on mount and never again - a
+ * component staying mounted across a shutdown completion (or a
+ * background tab finishing one) would keep showing stale priority
+ * data indefinitely. Now also listens for a small custom event that
+ * shutdown/page.tsx dispatches the moment a shutdown actually saves,
+ * so any currently-mounted priority widget (NextMoveWidget, TaskCard,
+ * TaskDetailSheet) refreshes immediately instead of only on next
+ * navigation/remount.
  */
 export function useTodaysPriorityTaskId(): string | null {
   const { user } = useUser()
@@ -15,13 +21,20 @@ export function useTodaysPriorityTaskId(): string | null {
 
   useEffect(() => {
     if (!user) return
-    fetchShutdownsRemote(user.id, 3)
-      .then((shutdowns) => {
-        const todayStr = new Date().toDateString()
-        const lastNight = shutdowns.find((s) => new Date(s.completed_at).toDateString() !== todayStr)
-        setPriorityTaskId(lastNight?.priority_task_id ?? null)
-      })
-      .catch(() => {})
+
+    function refresh() {
+      fetchShutdownsRemote(user!.id, 3)
+        .then((shutdowns) => {
+          const todayStr = new Date().toDateString()
+          const lastNight = shutdowns.find((s) => new Date(s.completed_at).toDateString() !== todayStr)
+          setPriorityTaskId(lastNight?.priority_task_id ?? null)
+        })
+        .catch(() => {})
+    }
+
+    refresh()
+    window.addEventListener(SHUTDOWN_COMPLETED_EVENT, refresh)
+    return () => window.removeEventListener(SHUTDOWN_COMPLETED_EVENT, refresh)
   }, [user])
 
   return priorityTaskId

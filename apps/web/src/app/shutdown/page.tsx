@@ -10,7 +10,7 @@ import { useAppState } from '@/hooks/useAppState'
 import { useUser } from '@/hooks/useUser'
 import { createScoredTask } from '@/lib/tasks/createScoredTask'
 import { markDayEndRitualCompleted } from '@/lib/utils/dayEndSnooze'
-import { useTodaysPriorityTaskId } from '@/hooks/useTodaysPriority'
+import { useTodaysPriorityTaskId, SHUTDOWN_COMPLETED_EVENT } from '@/hooks/useTodaysPriority'
 
 const CLOSING_HOLD_MS = 3000
 
@@ -48,6 +48,9 @@ export default function ShutdownPage() {
     if (!user) throw new Error('not signed in')
     await insertShutdownRemote({ userId: user.id, completedTaskIds: result.completedTaskIds, carriedTaskIds: result.carriedTaskIds, priorityTaskId: result.priorityTaskId, notes: result.focusText || null })
     markDayEndRitualCompleted()
+    // New - the actual fix for stale priority data. Any mounted
+    // useTodaysPriorityTaskId consumer picks this up immediately.
+    window.dispatchEvent(new Event(SHUTDOWN_COMPLETED_EVENT))
     await new Promise((resolve) => setTimeout(resolve, CLOSING_HOLD_MS))
     transition('IDLE')
     if (typeof window !== 'undefined' && '__TAURI__' in window) {

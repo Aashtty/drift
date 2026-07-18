@@ -12,6 +12,18 @@ interface HyperfocusLockProps {
 
 const SECONDARY_EXIT_DELAY_MS = 15_000
 
+/**
+ * Real fix: this component's justification-text and secondary-exit
+ * timers both keyed purely off mount, using plain useEffect([]) with
+ * no dependency tying them to a specific lock-in "session." If someone
+ * exits Hyperfocus and immediately re-enters it, React can reuse the
+ * same component instance (same type, same position in the tree)
+ * without unmounting/remounting - meaning showJustification/
+ * showSecondaryExit could stay in whatever state the PREVIOUS lock-in
+ * left them in, rather than genuinely restarting for the new one.
+ * Fixed with an internal lockKey that increments on mount and drives
+ * both effects' dependency arrays, forcing a real reset each time.
+ */
 export function HyperfocusLock({ taskName, elapsedSeconds, onExit }: HyperfocusLockProps) {
   const [exitText, setExitText] = useState('')
   const [pulseKey, setPulseKey] = useState(0)
@@ -19,23 +31,29 @@ export function HyperfocusLock({ taskName, elapsedSeconds, onExit }: HyperfocusL
   const [confirmingSecondaryExit, setConfirmingSecondaryExit] = useState(false)
   const [showJustification, setShowJustification] = useState(true)
   const inputRef = useRef<HTMLInputElement>(null)
+  const lockKeyRef = useRef(0)
+  lockKeyRef.current += 1
+  const lockKey = lockKeyRef.current
 
   useEffect(() => {
     inputRef.current?.focus()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockKey])
 
-  // New: a brief, self-dismissing line confirming what just happened -
-  // this is the "on-arrival" half of justifying the feature (NowBar's
-  // hover explainer is the "before you click" half).
   useEffect(() => {
+    setShowJustification(true)
     const t = setTimeout(() => setShowJustification(false), 4000)
     return () => clearTimeout(t)
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockKey])
 
   useEffect(() => {
+    setShowSecondaryExit(false)
+    setConfirmingSecondaryExit(false)
     const t = setTimeout(() => setShowSecondaryExit(true), SECONDARY_EXIT_DELAY_MS)
     return () => clearTimeout(t)
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockKey])
 
   useEffect(() => {
     const interval = setInterval(() => setPulseKey((k) => k + 1), 30 * 60 * 1000)
