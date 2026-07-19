@@ -7,11 +7,16 @@ export interface CalendarTokens {
   connected_at: string
 }
 
+// `end` removed - confirmed dead everywhere it's produced or consumed
+// (UpcomingEvents, useCalendarBridge, NowBar all only ever read
+// `.start`). The app's whole event model is single-instant based
+// (countdowns, "starting now" triggers), so carrying a range field
+// nothing uses was just an invitation for something to eventually read
+// it and silently do the wrong thing with a ranged event.
 export interface CalendarEvent {
   id: string
   summary: string
   start: string // ISO
-  end: string // ISO
   source: 'google' | 'manual'
 }
 

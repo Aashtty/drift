@@ -3,9 +3,6 @@ import { useEffect, useState, useCallback } from 'react'
 import type { CalendarEvent } from '@/types/calendar'
 import { fetchEventsRemote } from '@/lib/db/queries'
 
-// Was 60_000 — the main reason events/EdgeArc felt like they only
-// updated "after a long time" or on reload: a new or deleted event
-// could take up to a full minute to reach the UI. Lowered to 20s.
 const POLL_MS = 20_000
 const PULSE_WINDOW_MS = 15 * 60 * 1000
 
@@ -23,7 +20,6 @@ export function useCalendarBridge(userId: string | null) {
           id: r.id,
           summary: r.title,
           start: r.start_time,
-          end: r.start_time,
           source: 'manual' as const,
         }))
       )
@@ -37,6 +33,18 @@ export function useCalendarBridge(userId: string | null) {
     async function poll() {
       try {
         const res = await fetch(`/api/calendar/upcoming?userId=${userId}`)
+        // Real bug fix: this never checked res.ok before touching
+        // state. A non-2xx response that still parses as JSON (e.g. an
+        // error body, or a transient 500 returning `{}`) would fall
+        // through to `data.events ?? []` → `[]`, wiping every event
+        // from the UI even though this isn't the "genuinely offline"
+        // case the surrounding catch block's comment claims to cover.
+        // Now a bad response is treated the same as a network failure:
+        // last-known events are preserved instead of cleared.
+        if (!res.ok) {
+          console.error('[useCalendarBridge] /api/calendar/upcoming returned', res.status)
+          return
+        }
         const data = await res.json()
         setGoogleEvents((data.events ?? []).map((e: any) => ({ ...e, source: 'google' as const })))
       } catch {
@@ -54,11 +62,30 @@ export function useCalendarBridge(userId: string | null) {
     return () => clearInterval(interval)
   }, [refreshManualEvents])
 
+  // Computed once here and reused by both nearEvent detection and the
+  // returned `events` list, instead of each place separately trying
+  // (or forgetting) to merge-and-sort googleEvents/manualEvents itself.
+  const allEventsSorted = [...googleEvents, ...manualEvents].sort(
+    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+  )
+
   useEffect(() => {
     function checkProximity() {
       const now = Date.now()
-      const allEvents = [...googleEvents, ...manualEvents]
-      const upcoming = allEvents.find((e) => {
+      // Real bug fix: this used to `.find()` over the raw, unsorted
+      // concatenation of googleEvents + manualEvents. googleEvents
+      // happens to come back sorted from Google's own orderBy:
+      // startTime, but manualEvents never gets sorted at all, and
+      // concatenating two arrays doesn't interleave them by time -
+      // it's just googleEvents followed by manualEvents in whatever
+      // order each arrived. `.find()` returns the first element in
+      // that array to satisfy the predicate, which is "first by array
+      // position," not "earliest in time." A manual event genuinely 2
+      // minutes away could lose to a Google event 14 minutes away
+      // just because Google events were listed first - the opposite
+      // of what "nearEvent" claims to be. Now searches the properly
+      // time-sorted list instead.
+      const upcoming = allEventsSorted.find((e) => {
         const start = new Date(e.start).getTime()
         return start > now && start - now <= PULSE_WINDOW_MS
       })
@@ -67,11 +94,7 @@ export function useCalendarBridge(userId: string | null) {
     checkProximity()
     const interval = setInterval(checkProximity, 10_000)
     return () => clearInterval(interval)
-  }, [googleEvents, manualEvents])
-
-  const allEventsSorted = [...googleEvents, ...manualEvents].sort(
-    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
-  )
+  }, [allEventsSorted])
 
   return {
     events: allEventsSorted,
