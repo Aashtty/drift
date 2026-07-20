@@ -3,38 +3,27 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react'
 import { supabase } from '@/lib/db/supabase'
 import { GlassPanel } from '@/components/ui/GlassPanel'
 import { AuthMark } from '@/components/auth/AuthMark'
+import { AuthHeroBackground } from '@/components/auth/AuthHeroBackground'
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 
 type Mode = 'signin' | 'signup' | 'reset'
 
-function MailIcon() {
-  return (<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3" /><path d="M2.2 4.3L8 8.5l5.8-4.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>)
-}
-function LockIcon() {
-  return (<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.3" /><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>)
-}
+function MailIcon() { return (<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3" /><path d="M2.2 4.3L8 8.5l5.8-4.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>) }
+function LockIcon() { return (<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.3" /><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>) }
 function EyeIcon({ open }: { open: boolean }) {
   if (!open) return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 8s2.2-4.5 6.5-4.5S14.5 8 14.5 8s-2.2 4.5-6.5 4.5S1.5 8 1.5 8Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /><circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" /></svg>)
   return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 8s2.2-4.5 6.5-4.5S14.5 8 14.5 8s-2.2 4.5-6.5 4.5S1.5 8 1.5 8Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /><path d="M2 2l12 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>)
 }
-function SpinnerIcon() {
-  return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.6" strokeOpacity="0.25" /><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>)
-}
-function ArrowLeftIcon() {
-  return (<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10.5 3L5 8l5.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>)
-}
-function WaveIcon() {
-  return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 10c1.5-3 3.5-3 5 0s3.5 3 5 0s3.5-3 4-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>)
-}
-function BoltIcon() {
-  return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M9 1.5L3.5 9h4L6.5 14.5L13 6.5h-4L9 1.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>)
-}
-function MoonIcon() {
-  return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5a5 5 0 0 0 7 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>)
-}
+function SpinnerIcon() { return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.6" strokeOpacity="0.25" /><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>) }
+function ArrowLeftIcon() { return (<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10.5 3L5 8l5.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>) }
+function WaveIcon() { return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 10c1.5-3 3.5-3 5 0s3.5 3 5 0s3.5-3 4-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>) }
+function BoltIcon() { return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M9 1.5L3.5 9h4L6.5 14.5L13 6.5h-4L9 1.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>) }
+function MoonIcon() { return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5a5 5 0 0 0 7 7Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>) }
 
 function passwordStrength(password: string): { label: string; color: string; score: number } {
   if (!password) return { label: '', color: 'var(--text-tertiary)', score: 0 }
@@ -55,8 +44,19 @@ const FEATURES = [
   { icon: <MoonIcon />, label: 'a real end to your day' },
 ]
 
+/**
+ * Complete redesign. AuthHeroBackground replaces the plain black
+ * fixed-position screen (and, per the request, EdgeArc no longer
+ * renders here at all - see layout.tsx). The card now tilts subtly
+ * toward the cursor via a spring-smoothed mouse-tracked 3D rotation,
+ * and Google Sign-In sits above the email/password form as a single
+ * shared entry point for both sign-in and sign-up (Google doesn't
+ * distinguish the two - Supabase creates the account automatically on
+ * first Google sign-in).
+ */
 export default function LoginPage() {
   const router = useRouter()
+  const reducedMotion = usePrefersReducedMotion()
   const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -64,9 +64,44 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [shakeKey, setShakeKey] = useState(0)
 
+  const mouseX = useMotionValue(0)
+  const mouseY = useMotionValue(0)
+  const rawRotateX = useTransform(mouseY, [-260, 260], [7, -7])
+  const rawRotateY = useTransform(mouseX, [-260, 260], [-7, 7])
+  const rotateX = useSpring(rawRotateX, { stiffness: 160, damping: 22 })
+  const rotateY = useSpring(rawRotateY, { stiffness: 160, damping: 22 })
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (reducedMotion) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    mouseX.set(e.clientX - rect.left - rect.width / 2)
+    mouseY.set(e.clientY - rect.top - rect.height / 2)
+  }
+  function handleMouseLeave() {
+    mouseX.set(0)
+    mouseY.set(0)
+  }
+
   const strength = mode === 'signup' ? passwordStrength(password) : null
+
+  async function handleGoogleSignIn() {
+    setError(null)
+    setGoogleLoading(true)
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/` },
+    })
+    if (oauthError) {
+      setGoogleLoading(false)
+      setError(oauthError.message)
+      setShakeKey((k) => k + 1)
+    }
+    // On success the browser navigates away to Google - no further
+    // local state change needed.
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -120,100 +155,117 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22, padding: 24 }}>
-      <motion.div key={shakeKey} initial={{ opacity: 0, y: 16 }} animate={error ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, 0] } : { opacity: 1, y: 0 }} transition={{ duration: error ? 0.4 : 0.5, ease: [0.16, 1, 0.3, 1] }} style={{ position: 'relative', zIndex: 1, width: 'min(380px, 92vw)' }}>
-        <GlassPanel chromatic style={{ padding: 36 }}>
-          <AuthMark />
-          <div style={{ textAlign: 'center', marginBottom: 22 }}>
-            <p className="text-glow" style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.04em', margin: 0 }}>DRIFT</p>
-            <p className="text-meta" style={{ marginTop: 6, fontSize: 12.5 }}>
-              {mode === 'signin' && 'welcome back.'}
-              {mode === 'signup' && 'start your focus practice.'}
-              {mode === 'reset' && "we'll send you a reset link."}
-            </p>
-          </div>
+    <main style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22, padding: 24, overflow: 'hidden' }}>
+      <AuthHeroBackground />
 
-          {mode !== 'reset' && (
-            <div className="glass" style={{ display: 'flex', padding: 3, borderRadius: 'var(--radius-full)', marginBottom: 18 }}>
-              {(['signin', 'signup'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => switchMode(m)}
-                  data-testid={`login-mode-${m}`}
-                  style={{ flex: 1, padding: '8px 0', borderRadius: 'var(--radius-full)', border: 'none', background: mode === m ? 'var(--surface-active)' : 'transparent', color: mode === m ? 'var(--text-primary)' : 'var(--text-tertiary)', fontSize: 12.5, fontWeight: mode === m ? 500 : 400, cursor: 'pointer' }}
-                >
-                  {m === 'signin' ? 'sign in' : 'sign up'}
-                </button>
-              ))}
+      <div onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} style={{ position: 'relative', zIndex: 1, perspective: 1200 }}>
+        <motion.div
+          key={shakeKey}
+          initial={{ opacity: 0, y: 16 }}
+          animate={error ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, 0] } : { opacity: 1, y: 0 }}
+          transition={{ duration: error ? 0.4 : 0.5, ease: [0.16, 1, 0.3, 1] }}
+          style={{ rotateX: reducedMotion ? 0 : rotateX, rotateY: reducedMotion ? 0 : rotateY, transformStyle: 'preserve-3d', width: 'min(380px, 92vw)' }}
+        >
+          <GlassPanel chromatic style={{ padding: 36 }}>
+            <AuthMark />
+            <div style={{ textAlign: 'center', marginBottom: 22 }}>
+              <p className="text-glow" style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.04em', margin: 0 }}>DRIFT</p>
+              <p className="text-meta" style={{ marginTop: 6, fontSize: 12.5 }}>
+                {mode === 'signin' && 'welcome back.'}
+                {mode === 'signup' && 'start your focus practice.'}
+                {mode === 'reset' && "we'll send you a reset link."}
+              </p>
             </div>
-          )}
 
-          {mode === 'reset' && (
-            <button type="button" onClick={() => switchMode('signin')} data-testid="login-back-to-signin" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer', marginBottom: 16, padding: 0 }}>
-              <ArrowLeftIcon /> back to sign in
-            </button>
-          )}
-
-          <AnimatePresence mode="wait">
-            <motion.form key={mode} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', display: 'flex' }}><MailIcon /></span>
-                <input type="email" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" data-testid="login-email-input" style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '11px 12px 11px 36px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }} />
-              </div>
-
-              {mode !== 'reset' && (
-                <div>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', display: 'flex' }}><LockIcon /></span>
-                    <input type={showPassword ? 'text' : 'password'} placeholder="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} data-testid="login-password-input" style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '11px 36px 11px 36px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }} />
-                    <button type="button" onClick={() => setShowPassword((s) => !s)} aria-label={showPassword ? 'hide password' : 'show password'} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex' }}>
-                      <EyeIcon open={showPassword} />
-                    </button>
-                  </div>
-
-                  {mode === 'signup' && password.length > 0 && strength && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7 }}>
-                      <div style={{ flex: 1, display: 'flex', gap: 3 }}>
-                        {[1, 2, 3].map((i) => (
-                          <div key={i} style={{ flex: 1, height: 3, borderRadius: 999, background: i <= strength.score ? strength.color : 'var(--border)', transition: 'background 200ms var(--ease-out-expo)' }} />
-                        ))}
-                      </div>
-                      <span className="text-micro-mono" style={{ color: strength.color, textTransform: 'capitalize', width: 40 }}>{strength.label}</span>
-                    </div>
-                  )}
-
-                  {mode === 'signin' && (
-                    <button type="button" onClick={() => switchMode('reset')} data-testid="login-forgot-password" style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 11.5, cursor: 'pointer', padding: 0 }}>
-                      forgot password?
-                    </button>
-                  )}
+            {mode !== 'reset' && (
+              <>
+                <GoogleAuthButton onClick={() => void handleGoogleSignIn()} loading={googleLoading} testId="login-google-button" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0' }}>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                  <span className="text-micro-mono" style={{ opacity: 0.6 }}>or continue with email</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
-              )}
 
-              <AnimatePresence>
-                {error && <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ color: 'var(--danger)', fontSize: 12, margin: 0 }} data-testid="login-error">{error}</motion.p>}
-                {info && <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ color: 'var(--success)', fontSize: 12, margin: 0 }} data-testid="login-info">{info}</motion.p>}
-              </AnimatePresence>
+                <div className="glass" style={{ display: 'flex', padding: 3, borderRadius: 'var(--radius-full)', marginBottom: 18 }}>
+                  {(['signin', 'signup'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => switchMode(m)}
+                      data-testid={`login-mode-${m}`}
+                      style={{ flex: 1, padding: '8px 0', borderRadius: 'var(--radius-full)', border: 'none', background: mode === m ? 'var(--surface-active)' : 'transparent', color: mode === m ? 'var(--text-primary)' : 'var(--text-tertiary)', fontSize: 12.5, fontWeight: mode === m ? 500 : 400, cursor: 'pointer' }}
+                    >
+                      {m === 'signin' ? 'sign in' : 'sign up'}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                data-testid="login-submit"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', background: 'var(--accent-gradient)', border: 'none', borderRadius: 'var(--radius-md)', color: 'var(--bg)', fontSize: 14, fontWeight: 500, cursor: loading ? 'default' : 'pointer', boxShadow: 'var(--glow-accent-sm)', marginTop: 4, opacity: loading ? 0.75 : 1 }}
-              >
-                {loading ? (
-                  <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} style={{ display: 'flex' }}><SpinnerIcon /></motion.span>
-                ) : mode === 'signin' ? 'sign in' : mode === 'signup' ? 'create account' : 'send reset link'}
+            {mode === 'reset' && (
+              <button type="button" onClick={() => switchMode('signin')} data-testid="login-back-to-signin" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer', marginBottom: 16, padding: 0 }}>
+                <ArrowLeftIcon /> back to sign in
               </button>
-            </motion.form>
-          </AnimatePresence>
-        </GlassPanel>
-      </motion.div>
+            )}
 
-      {/* New - a quiet feature strip so the screen sells the product,
-          not just a form. No new dependency, three icon+label pairs. */}
-      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 'min(380px, 92vw)' }}>
+            <AnimatePresence mode="wait">
+              <motion.form key={mode} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', display: 'flex' }}><MailIcon /></span>
+                  <input type="email" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" data-testid="login-email-input" style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '11px 12px 11px 36px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }} />
+                </div>
+
+                {mode !== 'reset' && (
+                  <div>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', display: 'flex' }}><LockIcon /></span>
+                      <input type={showPassword ? 'text' : 'password'} placeholder="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} data-testid="login-password-input" style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '11px 36px 11px 36px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }} />
+                      <button type="button" onClick={() => setShowPassword((s) => !s)} aria-label={showPassword ? 'hide password' : 'show password'} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex' }}>
+                        <EyeIcon open={showPassword} />
+                      </button>
+                    </div>
+
+                    {mode === 'signup' && password.length > 0 && strength && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7 }}>
+                        <div style={{ flex: 1, display: 'flex', gap: 3 }}>
+                          {[1, 2, 3].map((i) => (
+                            <div key={i} style={{ flex: 1, height: 3, borderRadius: 999, background: i <= strength.score ? strength.color : 'var(--border)', transition: 'background 200ms var(--ease-out-expo)' }} />
+                          ))}
+                        </div>
+                        <span className="text-micro-mono" style={{ color: strength.color, textTransform: 'capitalize', width: 40 }}>{strength.label}</span>
+                      </div>
+                    )}
+
+                    {mode === 'signin' && (
+                      <button type="button" onClick={() => switchMode('reset')} data-testid="login-forgot-password" style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 11.5, cursor: 'pointer', padding: 0 }}>
+                        forgot password?
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <AnimatePresence>
+                  {error && <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ color: 'var(--danger)', fontSize: 12, margin: 0 }} data-testid="login-error">{error}</motion.p>}
+                  {info && <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ color: 'var(--success)', fontSize: 12, margin: 0 }} data-testid="login-info">{info}</motion.p>}
+                </AnimatePresence>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  data-testid="login-submit"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', background: 'var(--accent-gradient)', border: 'none', borderRadius: 'var(--radius-md)', color: 'var(--bg)', fontSize: 14, fontWeight: 500, cursor: loading ? 'default' : 'pointer', boxShadow: 'var(--glow-accent-sm)', marginTop: 4, opacity: loading ? 0.75 : 1 }}
+                >
+                  {loading ? (
+                    <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} style={{ display: 'flex' }}><SpinnerIcon /></motion.span>
+                  ) : mode === 'signin' ? 'sign in' : mode === 'signup' ? 'create account' : 'send reset link'}
+                </button>
+              </motion.form>
+            </AnimatePresence>
+          </GlassPanel>
+        </motion.div>
+      </div>
+
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 'min(380px, 92vw)' }}>
         {FEATURES.map((f) => (
           <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-tertiary)' }}>
             <span style={{ display: 'flex', color: 'var(--accent)', opacity: 0.8 }}>{f.icon}</span>

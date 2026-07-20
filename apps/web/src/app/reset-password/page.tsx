@@ -7,20 +7,15 @@ import { motion } from 'motion/react'
 import { supabase } from '@/lib/db/supabase'
 import { GlassPanel } from '@/components/ui/GlassPanel'
 import { AuthMark } from '@/components/auth/AuthMark'
+import { AuthHeroBackground } from '@/components/auth/AuthHeroBackground'
 
-function LockIcon() {
-  return (<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.3" /><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>)
-}
+function LockIcon() { return (<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.3" /><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>) }
 function EyeIcon({ open }: { open: boolean }) {
   if (!open) return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 8s2.2-4.5 6.5-4.5S14.5 8 14.5 8s-2.2 4.5-6.5 4.5S1.5 8 1.5 8Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /><circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" /></svg>)
   return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.5 8s2.2-4.5 6.5-4.5S14.5 8 14.5 8s-2.2 4.5-6.5 4.5S1.5 8 1.5 8Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /><path d="M2 2l12 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>)
 }
-function SpinnerIcon() {
-  return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.6" strokeOpacity="0.25" /><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>)
-}
-function CheckIcon() {
-  return (<svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4.5" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>)
-}
+function SpinnerIcon() { return (<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.6" strokeOpacity="0.25" /><path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>) }
+function CheckIcon() { return (<svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4.5" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>) }
 
 type Status = 'checking' | 'ready' | 'invalid' | 'done'
 
@@ -67,7 +62,8 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <main style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'hidden' }}>
+      <AuthHeroBackground />
       <GlassPanel chromatic style={{ padding: 36, width: 'min(380px, 92vw)', position: 'relative', zIndex: 1 }}>
         <AuthMark />
         <div style={{ textAlign: 'center', marginBottom: 22 }}>
@@ -85,12 +81,7 @@ export default function ResetPasswordPage() {
         {status === 'invalid' && (
           <div style={{ textAlign: 'center', padding: '10px 0' }}>
             <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 18 }}>This reset link is invalid or has expired.</p>
-            <button
-              type="button"
-              onClick={() => router.push('/login')}
-              data-testid="reset-password-back-to-login"
-              style={{ padding: '11px 20px', background: 'var(--accent-gradient)', border: 'none', borderRadius: 'var(--radius-md)', color: 'var(--bg)', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}
-            >
+            <button type="button" onClick={() => router.push('/login')} data-testid="reset-password-back-to-login" style={{ padding: '11px 20px', background: 'var(--accent-gradient)', border: 'none', borderRadius: 'var(--radius-md)', color: 'var(--bg)', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
               back to sign in
             </button>
           </div>
@@ -110,12 +101,7 @@ export default function ResetPasswordPage() {
               <input type={showPassword ? 'text' : 'password'} placeholder="confirm new password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} autoComplete="new-password" data-testid="reset-password-confirm-input" style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '11px 12px 11px 36px', color: 'var(--text-primary)', fontSize: 14, outline: 'none' }} />
             </div>
             {error && <p style={{ color: 'var(--danger)', fontSize: 12, margin: 0 }} data-testid="reset-password-error">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              data-testid="reset-password-submit"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', background: 'var(--accent-gradient)', border: 'none', borderRadius: 'var(--radius-md)', color: 'var(--bg)', fontSize: 14, fontWeight: 500, cursor: loading ? 'default' : 'pointer', boxShadow: 'var(--glow-accent-sm)', marginTop: 4, opacity: loading ? 0.75 : 1 }}
-            >
+            <button type="submit" disabled={loading} data-testid="reset-password-submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', background: 'var(--accent-gradient)', border: 'none', borderRadius: 'var(--radius-md)', color: 'var(--bg)', fontSize: 14, fontWeight: 500, cursor: loading ? 'default' : 'pointer', boxShadow: 'var(--glow-accent-sm)', marginTop: 4, opacity: loading ? 0.75 : 1 }}>
               {loading ? (<motion.span animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} style={{ display: 'flex' }}><SpinnerIcon /></motion.span>) : 'update password'}
             </button>
           </form>

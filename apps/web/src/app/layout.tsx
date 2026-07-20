@@ -2,6 +2,7 @@
 'use client'
 
 import '@/styles/globals.css'
+import { usePathname } from 'next/navigation'
 import { AmbientBackground } from '@/components/core/AmbientBackground'
 import { ParticleCanvas } from '@/components/core/ParticleCanvas'
 import { EdgeArc } from '@/components/core/EdgeArc'
@@ -12,23 +13,42 @@ import { useUser } from '@/hooks/useUser'
 import { useCalendarBridge } from '@/hooks/useCalendarBridge'
 import { useSettingsStore } from '@/stores/settingsStore'
 
+// Real bug fix: EdgeArc (and the ambient blobs/particles) were mounted
+// unconditionally here with zero route awareness - they rendered on
+// every page including /login, which is exactly the "I don't want to
+// see the edge arc on login" report. Auth routes now render their own
+// dedicated AuthHeroBackground (see login/page.tsx and
+// reset-password/page.tsx) instead of the app's dashboard ambient
+// system - keeping both mounted at once would just double up and look
+// cluttered underneath a purpose-built visual.
+const AUTH_ROUTES = ['/login', '/reset-password']
+
 function LayoutInner({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const { user } = useUser()
   const { nearEvent, events } = useCalendarBridge(user?.id ?? null)
   const settings = useSettingsStore((s) => s.settings)
+  const isAuthRoute = AUTH_ROUTES.includes(pathname)
 
   return (
     <>
-      <AmbientBackground />
+      {!isAuthRoute && (
+        <>
+          <AmbientBackground />
+          <ParticleCanvas />
+          <EdgeArc
+            fuzzyTime={settings?.fuzzy_time ?? false}
+            dayStart={settings?.day_start ?? '09:00'}
+            dayEnd={settings?.day_end ?? '19:00'}
+            nearEvent={nearEvent}
+            events={events}
+          />
+        </>
+      )}
+      {/* Stays mounted everywhere - it just writes CSS custom
+          properties onto the document root, which auth pages still
+          need for var(--accent) etc to resolve correctly. */}
       <StateTransition />
-      <ParticleCanvas />
-      <EdgeArc
-        fuzzyTime={settings?.fuzzy_time ?? false}
-        dayStart={settings?.day_start ?? '09:00'}
-        dayEnd={settings?.day_end ?? '19:00'}
-        nearEvent={nearEvent}
-        events={events}
-      />
       <AppShell>{children}</AppShell>
     </>
   )
