@@ -4,6 +4,12 @@ import { useTaskStore } from '@/stores/taskStore'
 import { useAnchorStore } from '@/stores/anchorStore'
 import type { Task, TaskStatus } from '@/types/task'
 
+// New - periodic re-sync so cross-browser/device changes (like a
+// deletion made elsewhere) show up while the app stays open, not only
+// on the next full reload. Matches the polling pattern already used by
+// useCalendarBridge elsewhere in the app.
+const RESYNC_INTERVAL_MS = 60_000
+
 export function useTaskEngine(userId: string) {
   const tasks = useTaskStore((s) => s.tasks)
   const loaded = useTaskStore((s) => s.loaded)
@@ -24,6 +30,12 @@ export function useTaskEngine(userId: string) {
     void loadAnchorsLocal(userId)
     void syncFromRemote(userId)
     void syncAnchorsRemote(userId)
+
+    const interval = setInterval(() => {
+      void syncFromRemote(userId)
+      void syncAnchorsRemote(userId)
+    }, RESYNC_INTERVAL_MS)
+    return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 

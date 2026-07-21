@@ -39,24 +39,33 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   tasks: [],
   loaded: false,
 
-  // Real bug fix: this used to load EVERY task in the local cache with
-  // no filter by user at all - switching accounts on the same device
-  // showed the previous account's tasks until (and unless) a remote
-  // sync happened to overwrite them, and anything the old account
-  // added while offline would leak into the new account permanently.
-  // Now scoped by userId - the real fix (clearLocalUserData, wiping
-  // everything on account switch) lives in AuthProvider; this is the
-  // defense-in-depth layer underneath it.
   loadFromLocal: async (userId) => {
     const local = await db.tasks.filter((t) => !t._deleted && t.user_id === userId).toArray()
     set({ tasks: local, loaded: true })
   },
 
+  // Real bug fix - this was the actual cause of "deleted a task in one
+  // browser, still shows in the other." bulkPut only ever ADDS/UPDATES
+  // local rows to match what the server returned - it never removes a
+  // locally-cached row that's gone missing from that fetch. Since a
+  // real Postgres DELETE leaves no tombstone to sync, the only way a
+  // client can learn "this was deleted somewhere else" is by absence:
+  // if a task is cached locally, isn't waiting on its own pending
+  // upload (_dirty), and isn't in the freshest remote fetch, it must
+  // have been deleted elsewhere - purge it locally too. Tasks that
+  // ARE dirty (just added offline, not yet synced) are deliberately
+  // left alone here so a genuinely new local task never gets purged
+  // just because the server doesn't know about it yet.
   syncFromRemote: async (userId: string) => {
     try {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return
       const remote = await fetchTasksRemote(userId)
+      const remoteIds = new Set(remote.map((t) => t.id))
       await db.tasks.bulkPut(remote.map((t) => ({ ...t, _dirty: false })))
+
+      const localForUser = await db.tasks.filter((t) => t.user_id === userId).toArray()
+      const staleIds = localForUser.filter((t) => !remoteIds.has(t.id) && !t._dirty).map((t) => t.id)
+      if (staleIds.length > 0) await db.tasks.bulkDelete(staleIds)
 
       const dirty = await db.tasks.filter((t) => Boolean(t._dirty) && t.user_id === userId).toArray()
       for (const t of dirty) {

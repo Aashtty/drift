@@ -22,14 +22,11 @@ import { useRoutineStore } from '@/stores/routineStore'
 import { organizeBrainDump } from '@/lib/ai/taskOrganizer'
 import { useUser } from '@/hooks/useUser'
 import { useOnboarding } from '@/hooks/useOnboarding'
+import { primeNotificationAudio } from '@/lib/audio/notificationChime'
 import { toast } from '@/stores/toastStore'
 import type { Task } from '@/types/task'
 
 const NO_SIDEBAR_ROUTES = ['/now', '/shutdown']
-// '/reset-password' added - a person landing here from an email link
-// has a transient recovery session that AuthProvider hasn't finished
-// resolving yet on first paint, so without this it could briefly
-// redirect to /login before the recovery session is picked up.
 const PUBLIC_ROUTES = ['/login', '/reset-password']
 
 function matchesRoute(pathname: string, route: string): boolean {
@@ -76,6 +73,24 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useRoutineEngine(user?.id ?? null)
   useRescoreOnReconnect()
+
+  // New - primes notification-chime audio on the very first real
+  // interaction anywhere in the app, so it's unlocked long before any
+  // popup fires later (see notificationChime.ts for the full
+  // explanation). Self-removes after firing once.
+  useEffect(() => {
+    function handler() {
+      primeNotificationAudio()
+      window.removeEventListener('pointerdown', handler)
+      window.removeEventListener('keydown', handler)
+    }
+    window.addEventListener('pointerdown', handler)
+    window.addEventListener('keydown', handler)
+    return () => {
+      window.removeEventListener('pointerdown', handler)
+      window.removeEventListener('keydown', handler)
+    }
+  }, [])
 
   useEffect(() => {
     if (isPublicRoute || showOnboarding) return

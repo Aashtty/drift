@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useTransitionStore } from '@/stores/transitionStore'
 import { useAppState } from '@/hooks/useAppState'
+import { AmbientPreview } from '@/components/settings/AmbientPreview'
 import { supabase } from '@/lib/db/supabase'
 import { toast } from '@/stores/toastStore'
 
@@ -49,15 +50,6 @@ function Toggle({ checked, onChange, testId }: { checked: boolean; onChange: (v:
   )
 }
 
-/**
- * Content pass: every section description below was rewritten from
- * developer-facing language ("particle color, background glow",
- * "day_start/day_end") into what the setting actually DOES for the
- * person using it - what changes on screen, and why they'd want to
- * touch it. New TASKS & LIMBO section adds the configurable decay
- * window, which was previously hardcoded to 7 days everywhere with no
- * way to change it.
- */
 export default function SettingsPage() {
   const { user } = useUser()
   const params = useSearchParams()
@@ -67,6 +59,7 @@ export default function SettingsPage() {
   const audioVolume = useAudioStore((s) => s.volume)
   const setAudioVolume = useAudioStore((s) => s.setVolume)
   const setTransitionMsLive = useTransitionStore((s) => s.setTransitionMs)
+  const liveTransitionMs = useTransitionStore((s) => s.transitionMs)
   const { setState } = useAppState()
 
   const [calendarConnected, setCalendarConnected] = useState(false)
@@ -82,10 +75,7 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => {
-    if (user) void loadSettings(user.id)
-  }, [user, loadSettings])
-
+  useEffect(() => { if (user) void loadSettings(user.id) }, [user, loadSettings])
   useEffect(() => { if (settings) setSessionMinutesDraft(String(settings.base_session_minutes)) }, [settings?.base_session_minutes])
   useEffect(() => { if (settings) setTransitionDraft(String(settings.ambient_transition_seconds ?? 30)) }, [settings?.ambient_transition_seconds])
   useEffect(() => { if (settings) setLimboDaysDraft(String(settings.limbo_decay_days ?? 7)) }, [settings?.limbo_decay_days])
@@ -184,10 +174,11 @@ export default function SettingsPage() {
           </Field>
         </SectionCard>
 
-        <SectionCard title="FOCUS MOOD" description="How quickly the colors and sounds around you change when you start a session, finish a task, or shut down for the day.">
-          <Field label={`How fast the mood shifts - ${transitionDraft}s`} hint="Fast feels snappy. Slow feels like the room gently settles around you.">
+        <SectionCard title="FOCUS MOOD" description="How gradually Drift's colors and sounds shift when you start a session, finish a task, or end your day - watch it happen below as you drag the slider.">
+          <Field label={`Transition speed - ${transitionDraft}s`}>
             <input type="range" min={MIN_TRANSITION_SECONDS} max={MAX_TRANSITION_SECONDS} value={transitionDraft} onChange={(e) => handleTransitionChange(e.target.value)} style={{ accentColor: 'var(--accent)' }} data-testid="ambient-transition-slider" />
           </Field>
+          <AmbientPreview transitionMs={liveTransitionMs} />
         </SectionCard>
 
         <SectionCard title="FOCUS SOUNDS" description="Brown noise, binaural tones, or ambient tracks you can play during a session.">

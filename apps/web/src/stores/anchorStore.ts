@@ -20,19 +20,24 @@ export const useAnchorStore = create<AnchorStoreState>((set, get) => ({
   anchors: [],
   loaded: false,
 
-  // Same fix as taskStore.loadFromLocal - scoped to the current user
-  // instead of returning everything cached locally regardless of who's
-  // signed in.
   loadFromLocal: async (userId) => {
     const local = await db.anchors.filter((a) => a.user_id === userId).toArray()
     set({ anchors: local, loaded: true })
   },
 
+  // Same fix as taskStore.syncFromRemote - anchors deleted on another
+  // device/browser previously stayed cached locally forever.
   syncFromRemote: async (userId: string) => {
     try {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return
       const remote = await fetchAnchorsRemote(userId)
+      const remoteIds = new Set(remote.map((a) => a.id))
       await db.anchors.bulkPut(remote.map((a) => ({ ...a, _dirty: false })))
+
+      const localForUser = await db.anchors.filter((a) => a.user_id === userId).toArray()
+      const staleIds = localForUser.filter((a) => !remoteIds.has(a.id) && !a._dirty).map((a) => a.id)
+      if (staleIds.length > 0) await db.anchors.bulkDelete(staleIds)
+
       const merged = await db.anchors.filter((a) => a.user_id === userId).toArray()
       set({ anchors: merged, loaded: true })
     } catch {

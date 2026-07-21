@@ -1,22 +1,6 @@
 // apps/web/src/lib/audio/notificationChime.ts
 'use client'
 
-/**
- * Tiny two-tone chime for notification popups (event-starting-now,
- * day-end prompt) - synthesized via Web Audio rather than an mp3, so
- * there's no asset to deploy and no missing-file failure mode. Reuses
- * the person's existing sound-volume preference so it doesn't sound
- * jarringly loud/quiet relative to whatever ambient sound they may
- * already have running.
- *
- * Autoplay note: browsers block audio that hasn't been preceded by a
- * user gesture on the page. Since these popups can appear at any time
- * (not necessarily right after a click), the very first chime in a
- * fresh tab may be silently blocked - this fails soft (a caught
- * rejection, no visible error, popup still shows normally) rather than
- * surfacing an error toast, since a missed chime isn't worth
- * interrupting someone over.
- */
 let sharedCtx: AudioContext | null = null
 
 function getContext(): AudioContext {
@@ -44,10 +28,29 @@ export async function playNotificationChime(volume: number = 0.3): Promise<void>
     if (ctx.state === 'suspended') await ctx.resume()
     const now = ctx.currentTime
     const peak = Math.max(0.02, Math.min(0.5, volume * 0.5))
-    // Two ascending notes - reads as "gentle notice," not an alarm.
     playTone(ctx, 660, now, 0.22, peak)
     playTone(ctx, 880, now + 0.14, 0.28, peak)
   } catch {
-    // Autoplay-blocked or unsupported - fail silently, see file comment.
+    // Autoplay-blocked or unsupported - fail silently.
   }
+}
+
+/**
+ * New - the actual fix for "chime works for events but not shutdown."
+ * Both features share this module's AudioContext, and browsers block
+ * a context from actually producing sound until it's been resumed
+ * during (or shortly after) a real user gesture. Event popups usually
+ * fire while you're actively clicking around, so that requirement is
+ * incidentally already met by the time one shows up. The day-end
+ * prompt is much more likely to fire after a stretch of no
+ * interaction, or right after a fresh page load - i.e. exactly when
+ * the context is still suspended and resume() silently no-ops rather
+ * than actually unlocking it. This primes the context on the very
+ * first real interaction anywhere in the app (see AppShell.tsx), so
+ * by the time ANY popup fires later, audio is already unlocked
+ * regardless of how recently you last clicked something.
+ */
+export function primeNotificationAudio(): void {
+  const ctx = getContext()
+  if (ctx.state === 'suspended') void ctx.resume().catch(() => {})
 }
